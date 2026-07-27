@@ -1,0 +1,21 @@
+E:\Client\TestingJig\CodeScanner\Entity\bin\Debug\Entity.dll
+E:\Client\TestingJig\CodeScanner\Entity\bin\Debug\Entity.pdb
+E:\Client\TestingJig\CodeScanner\Entity\obj\Debug\Entity.dll
+E:\Client\TestingJig\CodeScanner\Entity\obj\Debug\Entity.pdb
+F:\Client\TestingJig\CodeScanner\Entity\bin\Debug\Entity.dll
+F:\Client\TestingJig\CodeScanner\Entity\bin\Debug\Entity.pdb
+F:\Client\TestingJig\CodeScanner\Entity\obj\Debug\Entity.csprojResolveAssemblyReference.cache
+F:\Client\TestingJig\CodeScanner\Entity\obj\Debug\Entity.dll
+F:\Client\TestingJig\CodeScanner\Entity\obj\Debug\Entity.pdb
+D:\GitLab\TestingJig\Entity\bin\Debug\Entity.dll
+D:\GitLab\TestingJig\Entity\bin\Debug\Entity.pdb
+D:\GitLab\TestingJig\Entity\obj\Debug\Entity.csproj.AssemblyReference.cache
+D:\GitLab\TestingJig\Entity\obj\Debug\Entity.csproj.CoreCompileInputs.cache
+D:\GitLab\TestingJig\Entity\obj\Debug\Entity.dll
+D:\GitLab\TestingJig\Entity\obj\Debug\Entity.pdb
+C:\july-2026\TestingJig (2)\TestingJig\Entity\bin\Debug\Entity.dll
+C:\july-2026\TestingJig (2)\TestingJig\Entity\bin\Debug\Entity.pdb
+C:\july-2026\TestingJig (2)\TestingJig\Entity\obj\Debug\Entity.csproj.AssemblyReference.cache
+C:\july-2026\TestingJig (2)\TestingJig\Entity\obj\Debug\Entity.csproj.CoreCompileInputs.cache
+C:\july-2026\TestingJig (2)\TestingJig\Entity\obj\Debug\Entity.dll
+C:\july-2026\TestingJig (2)\TestingJig\Entity\obj\Debug\Entity.pdb

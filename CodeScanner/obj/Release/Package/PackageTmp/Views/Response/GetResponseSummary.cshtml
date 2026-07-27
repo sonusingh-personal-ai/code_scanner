@@ -1,0 +1,49 @@
+﻿@model List<Entity.enResponseSummary>
+@{
+    ViewBag.Title = "Index";
+    var sn = 1;
+}
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Response Table</h3>
+                    </div>
+                    <!-- /.card-header -->
+                    <div class="card-body">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10px">#</th>
+                                    <th>Paramerters</th>
+                                    <th style="width: 40px">Display</th>
+                                    <th style="width: 40px">Actual</th>
+                                    <th style="width: 40px">Status</th>
+                                    <th style="width: 40px">IsFinal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model)
+                                {
+                                    <tr>
+                                        <td>@sn .</td>
+                                        <td>@item.Parameters</td>
+                                        <td>@item.Dispaly</td>
+                                        <td>@item.Actual</td>
+                                        <td>@item.Status</td>
+                                        <td>@item.IsFinal </td>
+                                    </tr>
+                                    sn++;
+                                }
+
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>

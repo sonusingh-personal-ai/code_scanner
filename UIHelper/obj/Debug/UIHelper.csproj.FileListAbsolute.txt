@@ -1,0 +1,21 @@
+E:\Client\TestingJig\CodeScanner\UIHelper\bin\Debug\UIHelper.dll
+E:\Client\TestingJig\CodeScanner\UIHelper\bin\Debug\UIHelper.pdb
+E:\Client\TestingJig\CodeScanner\UIHelper\obj\Debug\UIHelper.dll
+E:\Client\TestingJig\CodeScanner\UIHelper\obj\Debug\UIHelper.pdb
+F:\Client\TestingJig\CodeScanner\UIHelper\bin\Debug\UIHelper.dll
+F:\Client\TestingJig\CodeScanner\UIHelper\bin\Debug\UIHelper.pdb
+F:\Client\TestingJig\CodeScanner\UIHelper\obj\Debug\UIHelper.csprojResolveAssemblyReference.cache
+F:\Client\TestingJig\CodeScanner\UIHelper\obj\Debug\UIHelper.dll
+F:\Client\TestingJig\CodeScanner\UIHelper\obj\Debug\UIHelper.pdb
+D:\GitLab\TestingJig\UIHelper\bin\Debug\UIHelper.dll
+D:\GitLab\TestingJig\UIHelper\bin\Debug\UIHelper.pdb
+D:\GitLab\TestingJig\UIHelper\obj\Debug\UIHelper.csproj.AssemblyReference.cache
+D:\GitLab\TestingJig\UIHelper\obj\Debug\UIHelper.csproj.CoreCompileInputs.cache
+D:\GitLab\TestingJig\UIHelper\obj\Debug\UIHelper.dll
+D:\GitLab\TestingJig\UIHelper\obj\Debug\UIHelper.pdb
+C:\july-2026\TestingJig (2)\TestingJig\UIHelper\bin\Debug\UIHelper.dll
+C:\july-2026\TestingJig (2)\TestingJig\UIHelper\bin\Debug\UIHelper.pdb
+C:\july-2026\TestingJig (2)\TestingJig\UIHelper\obj\Debug\UIHelper.csproj.AssemblyReference.cache
+C:\july-2026\TestingJig (2)\TestingJig\UIHelper\obj\Debug\UIHelper.csproj.CoreCompileInputs.cache
+C:\july-2026\TestingJig (2)\TestingJig\UIHelper\obj\Debug\UIHelper.dll
+C:\july-2026\TestingJig (2)\TestingJig\UIHelper\obj\Debug\UIHelper.pdb

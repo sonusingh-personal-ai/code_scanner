@@ -1,0 +1,11 @@
+E:\Client\TestingJig\CodeScanner\Entity\bin\Release\Entity.dll
+E:\Client\TestingJig\CodeScanner\Entity\bin\Release\Entity.pdb
+E:\Client\TestingJig\CodeScanner\Entity\obj\Release\Entity.dll
+E:\Client\TestingJig\CodeScanner\Entity\obj\Release\Entity.pdb
+E:\Client\TestingJig\CodeScanner\Entity\obj\Release\Entity.csprojResolveAssemblyReference.cache
+D:\GitLab\TestingJig\Entity\bin\Release\Entity.dll
+D:\GitLab\TestingJig\Entity\bin\Release\Entity.pdb
+D:\GitLab\TestingJig\Entity\obj\Release\Entity.dll
+D:\GitLab\TestingJig\Entity\obj\Release\Entity.pdb
+D:\GitLab\TestingJig\Entity\obj\Release\Entity.csproj.AssemblyReference.cache
+D:\GitLab\TestingJig\Entity\obj\Release\Entity.csproj.CoreCompileInputs.cache
