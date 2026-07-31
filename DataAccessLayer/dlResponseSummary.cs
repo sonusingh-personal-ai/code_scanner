@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SqlClient;
+using Utility;
 
 namespace DataAccessLayer
 {
@@ -12,6 +14,44 @@ namespace DataAccessLayer
             : base("ResponseSummary")
         {
             this._enResponseSummary = enResponseSummary_;
+        }
+
+        // Batch fetch latest summary per ResponseId for given list of response IDs
+        public Dictionary<int, enResponseSummary> ReadLatestForResponseIds(List<int> responseIds_)
+        {
+            var result = new Dictionary<int, enResponseSummary>();
+            if (responseIds_ == null || responseIds_.Count == 0)
+                return result;
+
+            // Build comma-separated ids for IN clause
+            var ids = string.Join(",", responseIds_);
+
+            // Query to get latest (by Id) summary per ResponseId
+            var sql = $@"
+                SELECT rs.Id, rs.ResponseId, rs.Parameters, rs.Dispaly, rs.Actual, rs.Status, rs.IsFinal
+                FROM (
+                    SELECT *, ROW_NUMBER() OVER(PARTITION BY ResponseId ORDER BY Id DESC) rn
+                    FROM ResponseSummary
+                    WHERE ResponseId IN ({ids})
+                ) rs
+                WHERE rs.rn = 1";
+
+            using (var conn = new SqlConnection(ApplicationSettings.DefaultConnectionString))
+            using (var cmd = new SqlCommand(sql, conn))
+            {
+                conn.Open();
+                using (var dr = cmd.ExecuteReader())
+                {
+                    while (dr.Read())
+                    {
+                        var en = new enResponseSummary();
+                        ConstructObject(dr, en);
+                        result[en.ResponseId] = en;
+                    }
+                }
+            }
+
+            return result;
         }
 
         public int Create()

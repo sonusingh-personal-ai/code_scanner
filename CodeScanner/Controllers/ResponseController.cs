@@ -147,7 +147,13 @@ namespace CodeScanner.Controllers
                     DateTime sDate = DateTime.ParseExact(startDate, "dd/MM/yyyy", null);
                     DateTime eDate = DateTime.ParseExact(endDate, "dd/MM/yyyy", null);
                     listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, sDate, eDate.AddDays(1), searchby.ToUpper(), typeof(enResponseSummary));
-                    listOfResponse.Where(x => x.Barcode.Contains(searchby) || x.Model.Contains(searchby) || x.SystemRating.Contains(searchby) || x.SerialCardNo.Contains(searchby));
+                    // Apply client-side filtering correctly (previous code did not assign the filtered result)
+                    listOfResponse = listOfResponse.Where(x =>
+                        (x.Barcode != null && x.Barcode.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
+                        || (x.Model != null && x.Model.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
+                        || (x.SystemRating != null && x.SystemRating.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
+                        || (x.SerialCardNo != null && x.SerialCardNo.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
+                    ).ToList();
                 }
                 else if (searchby != "")
                 {
@@ -184,6 +190,8 @@ namespace CodeScanner.Controllers
             }
 
             List<enResponseTblResp> responseList = new List<enResponseTblResp>();
+            // build a lookup for office members to avoid repeated list scans
+            var officeLookup = listOfOfficeMember.ToDictionary(x => x.ID, x => x.Name);
             foreach (var item in listOfResponse)
             {
                 var enResponsetblResp = new enResponseTblResp();
@@ -192,10 +200,11 @@ namespace CodeScanner.Controllers
                 enResponsetblResp.BarCode = item.Barcode;
                 enResponsetblResp.Model = item.Model;
                 enResponsetblResp.SysRating = item.SystemRating;
-                enResponsetblResp.VisualBy = listOfOfficeMember.Find(x => x.ID == item.VisualBy) != null ? listOfOfficeMember.Find(x => x.ID == item.VisualBy).Name : "";
+                string name;
+                enResponsetblResp.VisualBy = officeLookup.TryGetValue(item.VisualBy, out name) ? name : string.Empty;
                 enResponsetblResp.ProdLine = Utility.Helper.ProductionLine(item.ProductionLine);
-                enResponsetblResp.TestedBy = listOfOfficeMember.Find(x => x.ID == item.TestedBy) != null ? listOfOfficeMember.Find(x => x.ID == item.TestedBy).Name : "";
-                enResponsetblResp.ProcEng = listOfOfficeMember.Find(x => x.ID == item.ProcessEngg) != null ? listOfOfficeMember.Find(x => x.ID == item.ProcessEngg).Name : "";
+                enResponsetblResp.TestedBy = officeLookup.TryGetValue(item.TestedBy, out name) ? name : string.Empty;
+                enResponsetblResp.ProcEng = officeLookup.TryGetValue(item.ProcessEngg, out name) ? name : string.Empty;
                 enResponsetblResp.QcStatus = Utility.Helper.TestingStage(item.QcStatus);
                 enResponsetblResp.CardSerNo = item.SerialCardNo;
                 enResponsetblResp.Date = item.CreatedOn.ToString();

@@ -45,10 +45,30 @@ namespace BusinessLogicLayer
         public List<enResponse> ReadAllAndAggregate(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null, params Type[] entityToAggregate_)
         {
             List<enResponse> listOfSettings = ReadAll(startRowNumber, endRowNumber, startDate, endDate, searchStr);
-            foreach (var item in listOfSettings)
+            if (entityToAggregate_.FirstOrDefault(item => item == typeof(enResponseSummary)) != null)
             {
-                var objBLDocument = new blResponse(item);
-                objBLDocument.Aggregate(entityToAggregate_);
+                // Batch load latest summaries for all responses to avoid N+1 queries
+                var responseIds = listOfSettings.ConvertAll(x => x.Id);
+                if (responseIds.Count > 0)
+                {
+                    var batchDAL = new DataAccessLayer.dlResponseSummary(new enResponseSummary());
+                    var summaries = batchDAL.ReadLatestForResponseIds(responseIds);
+                    foreach (var item in listOfSettings)
+                    {
+                        if (summaries != null && summaries.ContainsKey(item.Id))
+                        {
+                            item.ResponseSummary = summaries[item.Id];
+                        }
+                    }
+                }
+            }
+            else
+            {
+                foreach (var item in listOfSettings)
+                {
+                    var objBLDocument = new blResponse(item);
+                    objBLDocument.Aggregate(entityToAggregate_);
+                }
             }
             return listOfSettings;
         }
