@@ -1,0 +1,147 @@
+﻿
+@section scripts{
+
+    <script>
+        $(document).ready(function () {
+            var oTbls = $('#responseTbl').dataTable({
+                "processing": true,
+                "serverSide": true,
+                "filter": true,
+                "ajax": {
+                    "url": "/response/GetResponse",
+                    "type": "POST",
+                    "datatype": "json",
+                    data: function (data) {
+                        var startDate = $('#min').val();
+                        var endDate = $('#max').val();
+                        data.startDate = startDate;
+                        data.endDate = endDate;
+                        changeBackGroup()
+                    }
+                },
+                'columnDefs': [
+                    {
+                        "targets": 11, // your case first column
+                        "className": "text-center"
+                    },
+                    {
+                        "targets": 12, // your case first column
+                        "className": "text-center"
+                    },
+                ],
+                "columns": [
+                { "data": "Id" },
+                { "data": "Sno" },
+                { "data": "BarCode" },
+                { "data": "Model" },
+                { "data": "SysRating" },
+                { "data": "ProdLine" },
+                { "data": "CardSerNo" },
+                { "data": "QcStatus" },
+                { "data": "VisualBy" },
+                { "data": "TestedBy" },
+                { "data": "ProcEng" },
+                { "data": "Date" },
+                {
+                    "data": function (o) {
+                        return "<a href='/response/getResponseSummary/" + o.Id + "' class='btn btn-info cls_" + o.Status + " text-center'><i class='fa fa-pencil'>View</i></a>";
+                    }
+                },
+                {
+                    "data": function (o) {
+                        return "<a href='javascript:void(0);' onclick='deleteResponse(" + o.Id + " )' class='btn btn-danger'><i class='fa fa-pencil'>Del</i></a>";
+                    }
+                }],
+                "lengthMenu": [[10, 25, 50, 100, 200, 300, 400, 500, 1000,8000], [10, 25, 50, 100, 200, 300, 400, 500, 1000,8000]]
+            });
+            collaps()
+        })
+
+        var minDate, maxDate;
+        $(document).ready(function () {
+            minDate = new DateTime($('#min'), {
+                format: 'DD/MM/YYYY'
+            });
+            maxDate = new DateTime($('#max'), {
+                format: 'DD/MM/YYYY'
+            });
+
+            // DataTables initialisation
+            var table = $('#responseTbl').DataTable();
+
+            // Refilter the table
+            $('#max').on('change', function () {
+                table.draw();
+            });
+
+        });
+
+        function changeBackGroup() {
+            timeout = setTimeout(alertFunc, 1000);
+        }
+        function alertFunc() {
+            $(".cls_green").css("background", "green")
+            $(".cls_red").css("background", "red")
+        }
+
+    </script>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title float-left">Response Table</h3>
+                        <button class="float-right btn btn-primary btn-md" onclick="getSelectedResponse()">Export</button>
+                        <button class="float-right btn btn-danger btn-md" style="margin-right:10px" onclick="deleteAllResp()">Delete All</button>
+                    </div>
+                    <div class="card-body" style="padding: 0px 0px 0px 19px;">
+                        <div class="row">
+                            <div class="col-sm-2">
+                                <!-- text input -->
+                                <div class="form-group">
+                                    <label>Start Date</label>
+                                    <input type="text" class="form-control" id="min" name="min">
+                                </div>
+                            </div>
+                            <div class="col-sm-2">
+                                <div class="form-group">
+                                    <label>End Date</label>
+                                    <input type="text" id="max" name="max" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="">
+                            <table class="table table-bordered" role="grid" id="responseTbl">
+                                <thead>
+                                    <tr>
+                                        <th>Id</th>
+                                        <th>Sno</th>
+                                        <th>BarCode</th>
+                                        <th>Model</th>
+                                        <th>Sys. Rating</th>
+                                        <th>Prod. Line</th>
+                                        <th>Card Sr. No.</th>
+                                        <th>T-Stage</th>
+                                        <th>Visual By</th>
+                                        <th>Tested By</th>
+                                        <th>Proc. Engg</th>
+                                        <th>Date | Time</th>
+                                        <th width="10px">Show</th>
+                                        <th width="10px">Del</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

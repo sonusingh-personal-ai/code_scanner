@@ -1,0 +1,62 @@
+2021-06-12 18:26:30.9687 || INFO || QrCode : PrinterNameOneNote for Windows 10||  
+2021-06-12 18:28:30.9124 || ERROR || **** Printer ERROR ***** 
+
+System.Web.HttpException (0x80004005): 'D:/QrCode/.png' is a physical path, but a virtual path was expected.
+   at System.Web.Util.UrlPath.CheckValidVirtualPath(String path)
+   at System.Web.Util.UrlPath.Combine(String appPath, String basepath, String relative)
+   at System.Web.VirtualPath.Combine(VirtualPath relativePath)
+   at System.Web.HttpRequest.MapPath(VirtualPath virtualPath, VirtualPath baseVirtualDir, Boolean allowCrossAppMapping)
+   at System.Web.HttpServerUtility.MapPath(String path)
+   at System.Web.HttpServerUtilityWrapper.MapPath(String path)
+   at CodeScanner.Controllers.HomeController.PrintQrCode(String qrCode, String printerName)||  
+2021-06-12 18:29:06.0078 || INFO || QrCode : PrinterNameOneNote for Windows 10||  
+2021-06-12 18:29:57.9542 || ERROR || **** Printer ERROR ***** 
+
+System.Web.HttpException (0x80004005): 'D:/QrCode/QrCode123.png' is a physical path, but a virtual path was expected.
+   at System.Web.Util.UrlPath.CheckValidVirtualPath(String path)
+   at System.Web.Util.UrlPath.Combine(String appPath, String basepath, String relative)
+   at System.Web.VirtualPath.Combine(VirtualPath relativePath)
+   at System.Web.HttpRequest.MapPath(VirtualPath virtualPath, VirtualPath baseVirtualDir, Boolean allowCrossAppMapping)
+   at System.Web.HttpServerUtility.MapPath(String path)
+   at System.Web.HttpServerUtilityWrapper.MapPath(String path)
+   at CodeScanner.Controllers.HomeController.PrintQrCode(String qrCode, String printerName)||  
+2021-06-12 18:30:03.2035 || INFO || QrCode : PrinterNameOneNote for Windows 10||  
+2021-06-12 18:31:48.0861 || ERROR || **** Printer ERROR ***** 
+
+System.Web.HttpException (0x80004005): 'D:/CompressTesting/test' is a physical path, but a virtual path was expected.
+   at System.Web.Util.UrlPath.CheckValidVirtualPath(String path)
+   at System.Web.Util.UrlPath.Combine(String appPath, String basepath, String relative)
+   at System.Web.VirtualPath.Combine(VirtualPath relativePath)
+   at System.Web.HttpRequest.MapPath(VirtualPath virtualPath, VirtualPath baseVirtualDir, Boolean allowCrossAppMapping)
+   at System.Web.HttpServerUtility.MapPath(String path)
+   at System.Web.HttpServerUtilityWrapper.MapPath(String path)
+   at CodeScanner.Controllers.HomeController.PrintQrCode(String qrCode, String printerName)||  
+2021-06-12 18:31:59.7187 || INFO || QrCode : PrinterNameOneNote for Windows 10||  
+2021-06-12 18:35:02.2326 || ERROR || **** Printer ERROR ***** 
+
+System.IO.FileNotFoundException: D:\QrCode\\.png
+   at System.Drawing.Image.FromFile(String filename, Boolean useEmbeddedColorManagement)
+   at System.Drawing.Image.FromFile(String filename)
+   at CodeScanner.Controllers.HomeController.<>c__DisplayClass4_0.<PrintQrCode>b__0(Object sender, PrintPageEventArgs args)
+   at System.Drawing.Printing.PrintDocument.OnPrintPage(PrintPageEventArgs e)
+   at System.Drawing.Printing.PrintDocument._OnPrintPage(PrintPageEventArgs e)
+   at System.Drawing.Printing.PrintController.PrintLoop(PrintDocument document)
+   at System.Drawing.Printing.PrintController.Print(PrintDocument document)
+   at System.Drawing.Printing.PrintDocument.Print()
+   at CodeScanner.Controllers.HomeController.PrintQrCode(String qrCode, String printerName)||  
+2021-06-12 18:35:40.0419 || INFO || QrCode : PrinterNameOneNote for Windows 10||  
+2021-06-12 19:01:10.0912 || INFO || QrCode : QrCode123PrinterNameOneNote for Windows 10||  
+2021-06-12 19:02:41.9496 || INFO || QrCode : PrinterNameOneNote for Windows 10||  
+2021-06-12 19:02:48.7256 || ERROR || **** Printer ERROR ***** 
+
+System.IO.FileNotFoundException: D:\QrCode\\.png
+   at System.Drawing.Image.FromFile(String filename, Boolean useEmbeddedColorManagement)
+   at System.Drawing.Image.FromFile(String filename)
+   at CodeScanner.Controllers.HomeController.<>c__DisplayClass4_0.<PrintQrCode>b__0(Object sender, PrintPageEventArgs args) in E:\Client\TestingJig\CodeScanner\CodeScanner\Controllers\HomeController.cs:line 160
+   at System.Drawing.Printing.PrintDocument.OnPrintPage(PrintPageEventArgs e)
+   at System.Drawing.Printing.PrintDocument._OnPrintPage(PrintPageEventArgs e)
+   at System.Drawing.Printing.PrintController.PrintLoop(PrintDocument document)
+   at System.Drawing.Printing.PrintController.Print(PrintDocument document)
+   at System.Drawing.Printing.PrintDocument.Print()
+   at CodeScanner.Controllers.HomeController.PrintQrCode(String qrCode, String printerName) in E:\Client\TestingJig\CodeScanner\CodeScanner\Controllers\HomeController.cs:line 173||  
+2021-06-12 19:02:58.5203 || INFO || QrCode : PrinterNameOneNote for Windows 10||  

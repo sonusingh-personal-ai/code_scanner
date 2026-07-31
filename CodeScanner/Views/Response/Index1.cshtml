@@ -1,0 +1,74 @@
+﻿@model List<Entity.enResponse>
+@{
+    ViewBag.Title = "Index";
+    var sn = 1;
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title float-left">Response Table</h3>
+                        <button class="float-right" onclick="getSelectedResponse()">Export</button>
+                    </div>
+                    <!-- /.card-header -->
+
+                    <div class="card-body">
+                        <div class="">
+                            <table class="table table-bordered table-striped dtr-inline" role="grid" aria-describedby="example1_info" id="example">
+                                <thead>
+                                    <tr>
+                                        <th hidden="hidden"></th>
+                                        <th>sno.</th>
+                                        <th>BarCode</th>
+                                        <th>Model</th>
+                                        <th>Visual By</th>
+                                        <th>TestedBy</th>
+                                        <th>Prod. line</th>
+                                        <th>line in chg.</th>
+                                        <th>Testing Jig</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>R</th>
+                                        <th>D</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr>
+                                            <td hidden="hidden">@item.Id</td>
+                                            <td>@sn</td>
+                                            <td>@item.Barcode</td>
+                                            <td>@item.Model</td>
+                                            <td>@item.VisualBy</td>
+                                            <td>@item.TestedBy</td>
+                                            <td>@item.ProductionLine</td>
+                                            <td>@item.ProcessEngg</td>
+                                            <td>@item.SerialCardNo</td>
+                                            <td>@item.CurrentDate</td>
+                                            @if (@item.listOfResponseSummary.Count == 0)
+                                            {
+                                                <td>None</td>
+                                            }
+                                            else
+                                            {
+                                                var color = @item.listOfResponseSummary.Last().Status == "PASS" ? "green" : "red";
+                                                <td style="background:@color">@item.listOfResponseSummary.Last().Status</td>
+                                            }
+                                            <td><a href="/response/getResponseSummary/@item.Id">show</a></td>
+                                            <td><a href="#" onclick="deleteResponse(@item.Id);"><i class="fa fa-trash" aria-hidden="true"></i></a></td>
+                                        </tr>
+                                        sn++;
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
