@@ -50,6 +50,12 @@ namespace DataAccessLayer
             return base.Delete(_enResponse.Id);
         }
 
+        // Delete using an existing SqlTransaction (batch operations)
+        public int Delete(System.Data.SqlClient.SqlTransaction objSqlTransaction_)
+        {
+            return base.Delete(objSqlTransaction_, _enResponse.Id);
+        }
+
         private void ConstructObject(IDataReader dr_, enResponse enResponse_)
         {
             enResponse_.Id = Convert.ToInt32(dr_["Id"]);

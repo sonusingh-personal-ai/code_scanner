@@ -24,6 +24,12 @@ namespace BusinessLogicLayer
             return GetDALReference().Delete();
         }
 
+        // Delete using an existing SqlTransaction (batch operations)
+        public int Delete(System.Data.SqlClient.SqlTransaction objSqlTransaction_)
+        {
+            return GetDALReference().Delete(objSqlTransaction_);
+        }
+
         public void Read()
         {
             GetDALReference().Read();

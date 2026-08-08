@@ -21,6 +21,23 @@ namespace CodeScanner.Controllers
     {
         static SerialPort _serialPort;
 
+        // How long to wait for a single line from the device before treating that
+        // particular read as "missed". Without this, SerialPort.ReadLine() blocks
+        // forever by default (ReadTimeout = -1), so one missed response from the
+        // device hung this request - and the browser, since SendParameter is called
+        // with a synchronous AJAX call - indefinitely.
+        const int ReadPerLineTimeoutMs = 5000;
+
+        // Total time (seconds) to keep waiting/retrying reads for a PASS/FAIL before
+        // giving up on this scan entirely and returning a clear timeout result.
+        const double OverallWatchdogSeconds = 120;
+        // _serialPort is shared (static) across every request, and by design stays open
+        // across separate HTTP requests while a scan's parameters stream in (see
+        // IsRecurrence below). Without serializing access, two overlapping requests -
+        // e.g. a rapid double-scan - can race: one closes/reopens the port while the
+        // other is still mid-ReadLine() on it, producing "The port is closed".
+        static readonly object _portLock = new object();
+
         [HttpPost]
         public JsonResult SendParameter(enResponse objResponse)
         {
@@ -105,7 +122,12 @@ namespace CodeScanner.Controllers
             string[] response = new string[] { };
             try
             {
-                Log.Info("@#Recurrence  : " + objResponse.IsRecurrence);
+                // Serializes all serial-port access across requests - see _portLock above.
+                // If a second scan/recurrence call arrives while this one is still mid-read,
+                // it now queues here instead of racing to close/reopen the same port.
+                lock (_portLock)
+                {
+                    Log.Info("@#Recurrence  : " + objResponse.IsRecurrence);
                 if (objResponse.IsRecurrence == false)
                 {
                     _serialPort = new SerialPort();
@@ -118,20 +140,43 @@ namespace CodeScanner.Controllers
                     _serialPort.Close();
                     _serialPort.Dispose();
                     _serialPort.Open();
+                    // See ReadPerLineTimeoutMs above - bounds every ReadLine() call below so a
+                    // missed/late response from the device can't block this thread forever.
+                    // _serialPort is static and reused across recurring calls, so this only
+                    // needs to be set here, on the initial (non-recurrence) open.
+                    _serialPort.ReadTimeout = ReadPerLineTimeoutMs;
                     _serialPort.WriteLine("#" + objResponse.Barcode + "@");
                 }
 
                 List<List<string>> stringObject = new List<List<string>>();
-                var rt = _serialPort.ReadTimeout;
                 DateTime now = DateTime.Now;
-                var t = DateTime.Now.Subtract(now).Seconds;
+                var t = 0d;
                 var count = 1;
                 #region while loop
 
-                while (t < 120)
+                while (t < OverallWatchdogSeconds)
                 {
+                    // Recomputed every iteration (previously this was only ever calculated
+                    // once, before the loop, and using TimeSpan.Seconds - which wraps back to
+                    // 0 every 60 seconds - so the 120s watchdog below never actually fired and
+                    // a genuinely silent device hung this request indefinitely).
+                    t = DateTime.Now.Subtract(now).TotalSeconds;
 
-                    var rec = _serialPort.ReadLine();
+                    string rec;
+                    try
+                    {
+                        rec = _serialPort.ReadLine();
+                    }
+                    catch (TimeoutException)
+                    {
+                        // Nothing arrived within ReadPerLineTimeoutMs - this is the "missed"
+                        // case. Don't treat it as fatal by itself: log it and let the overall
+                        // watchdog (t, checked at the top of this loop) decide whether to keep
+                        // waiting for the device to catch up or give up for good.
+                        Log.Error("ComPortController.SendParameter - Read timeout waiting for device response (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
+                        continue;
+                    }
+
                     Log.Info("Receving string :- " + rec);
 
                     if (rec.Length != 4)
@@ -195,7 +240,7 @@ namespace CodeScanner.Controllers
 
                                     Log.Info(listOfOfficeMembers.Count.ToString());
                                     var productinLine = objResponse.ProductionLine == 1 ? "Card" : "Assembly";
-                                    t = 121;
+                                    t = OverallWatchdogSeconds + 1;
                                     if (matchStr == "FAIL")
                                     {
                                         Log.Info("****** Result FAIL ******");
@@ -249,6 +294,18 @@ namespace CodeScanner.Controllers
                 }
                 #endregion
 
+                // Fell out of the loop because OverallWatchdogSeconds elapsed without a
+                // PASS/FAIL - return a clear timeout result instead of hanging or handing
+                // back an empty/ambiguous object. isOk = true so the client's auto-retry
+                // (SendToComPort) stops instead of looping forever against a dead device.
+                Log.Error("ComPortController.SendParameter - Overall watchdog (" + OverallWatchdogSeconds.ToString("F0") + "s) elapsed without PASS/FAIL for Barcode=" + objResponse.Barcode);
+                _serialPort.Close();
+                _serialPort.Dispose();
+                matchString.status = (int)ResponseStatus.Fail;
+                matchString.message = "No response received from the device within " + OverallWatchdogSeconds.ToString("F0") + " seconds. Check the connection and try again.";
+                matchString.isOk = true;
+                return Json(matchString, JsonRequestBehavior.AllowGet);
+                } // end lock (_portLock)
             }
             catch (Exception ex)
             {
@@ -260,10 +317,6 @@ namespace CodeScanner.Controllers
                 Log.Error("Exception : " + ex.ToString());
                 return Json(matchString, JsonRequestBehavior.AllowGet);
             }
-            _serialPort.Close();
-            _serialPort.Dispose();
-
-            return Json(matchString, JsonRequestBehavior.AllowGet);
         }
 
 

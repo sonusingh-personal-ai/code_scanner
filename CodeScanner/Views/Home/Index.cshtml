@@ -98,12 +98,17 @@
             $("#info_status").val("Disable").css("background","red")
         }
         setInfo()
+        validateFileds()
 
         $('#bCode').codeScanner({
             maxEntryTime: 500,
             onScan: function ($element, code) {
                 $('#sysNumber').val('');
                 $('#sysNumber').val(code);
+                if (!validateProductionLine()) {
+                    alert("if production line is assembly card serial number must have valid number.");
+                    return;
+                }
                 SendToComPort(false);
             }
         });
@@ -112,70 +117,32 @@
         $("#productionLine").on("change",function(i,e){
             checkProductionLine()
         })
-        
+
         $('#productionLine').trigger("change");
 
-        //$('#customSwitches').on("change",function(){
-        //    var isDispProgNoOn = $('#customSwitches:checked').val();
-        //    if(isDispProgNoOn == 'on'){
-        //        $("#display_pv").attr("disabled","disabled").val('')
 
-        //    }else{
-        //        $("#display_pv").removeAttr("disabled");
-        //    }
-        //});
 
-        //$("#display_pv").attr("disabled","disabled")
-        //$('#customSwitches').prop('checked', true);
         collaps()
         setCustomSwtich()
-        //autoGenerateExcel()
     })
 
-    function checkProductionLine(){
+    function checkProductionLine() {
+        $("#serialCardNo").val('')
         var ProdLine=$("#productionLine").val();
         if(ProdLine == '1'){
+            // Save the current serial card number to localStorage before clearing
+            var currentSerialCardNo = $("#serialCardNo").val();
+            if(currentSerialCardNo && currentSerialCardNo.trim() !== ''){
+                localStorage.setItem("serialCardNo", currentSerialCardNo);
+            }
             $("#serialCardNo").attr("disabled","disabled").val('')
         }else if(ProdLine == '2'){
             $("#serialCardNo").removeAttr("disabled")
-            $("#serialCardNo").val(localStorage.getItem("serialCardNo"))
         }
     }
 
-    //function PrintQr(){
-    //    var qrCode = $("#sysNumber").val();
-    //    var printer = $("#prnter").val();
-    //    $.ajax({
-    //        async: false,
-    //        type: "GET",
-    //        url: "/home/printqrcode?qrCode=" + qrCode + "&printerName=" + printer,
-    //        success: function (resp) {
-    //            alert("Print Done")
-    //        },
-    //        error: function (xhr, status) {
-    //            console.log(xhr)
-    //            console.log(status)
-    //        }
-    //    })
-    //}
-
     function validate(){
         $("QcStatus").val();
-    }
-
-    function autoGenerateExcel(){
-        $.ajax({
-            async: false,
-            type: "GET",
-            url: "/home/generateExcel",
-            success: function (resp) {
-                
-            },
-            error: function (xhr, status) {
-                console.log(xhr)
-                console.log(status)
-            }
-        })
     }
 
 </script>
@@ -193,10 +160,10 @@
                 <div class="form-group">
                     <label>Display Prog. No.</label>
                     @*<input style="width:85%" class="form-control" id="display_pv"  maxlength="20"/>
-                    <div style="width:20%;float:right;margin-top: -32px;margin-right: -40px;" class="custom-control custom-switch">
-                        <input type="checkbox" class="custom-control-input" id="customSwitches">
-                        <label class="custom-control-label" for="customSwitches"></label>
-                    </div>*@
+                        <div style="width:20%;float:right;margin-top: -32px;margin-right: -40px;" class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="customSwitches">
+                            <label class="custom-control-label" for="customSwitches"></label>
+                        </div>*@
                     <select class="form-control" id="display_pv">
                         <option value="" selected> Select Display Pro. No.</option>
                     </select>
@@ -212,7 +179,7 @@
                 <div class="form-group">
                     <label>Testing Stage</label>
                     <select class="form-control validate" id="QcStatus">
-                        <option>Select QC Status</option>
+                        <option value="">Select QC Status</option>
                         <option value="1">Testing</option>
                         <option value="2">Qc</option>
                         <option value="3">Oqc</option>
@@ -239,7 +206,7 @@
                 </div>
                 <div class="form-group">
                     <label>Sys Rating</label>
-                    <input class="form-control" id="sysRating" required="required" disabled="disabled"/>
+                    <input class="form-control" id="sysRating" required="required" disabled="disabled" />
                 </div>
             </div>
 
@@ -247,7 +214,7 @@
                 <div class="form-group">
                     <label>Production Line</label>
                     <select class="form-control validate" id="productionLine">
-                        <option>Select Production Line</option>
+                        <option value="">Select Production Line</option>
                         <option value="1" selected>Card</option>
                         <option value="2">Assembly</option>
                     </select>
@@ -269,7 +236,7 @@
             <div class="col-md-2">
                 <div class="form-group">
                     <label>Card Serial Number</label>
-                    <input class="form-control" id="serialCardNo" maxlength="20"/>
+                    <input class="form-control" id="serialCardNo" maxlength="20" />
                 </div>
                 <div class="form-group">
                     <label>Printer List</label>
@@ -294,8 +261,8 @@
                 </div>
                 <div class="form-group">
                     <label>Baud Rate</label>
-                    <select id="baudRate" class="form-control">
-                        <option>Select</option>
+                    <select id="baudRate" class="form-control validate">
+                        <option value="">Select</option>
                         <option value="110">110</option>
                         <option value="300">300</option>
                         <option value="600">600</option>

@@ -1,12 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Web.Mvc;
-using System.IO;
-using OfficeOpenXml;
+﻿using OfficeOpenXml;
 using OfficeOpenXml.Style;
-using Entity;
 using BusinessLogicLayer;
+using Entity;
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Web.Mvc;
+
 
 namespace CodeScanner.Controllers
 {
@@ -29,10 +32,10 @@ namespace CodeScanner.Controllers
             {
                 listOfResponses = objBLResponse.ReadAll().Where(x => ids.Contains(x.Id)).ToList();
 
-                foreach(var response in listOfResponses)
+                foreach (var response in listOfResponses)
                 {
-                    var objBLResponseSummary = new blResponseSummary(new enResponseSummary() { ResponseId = response.Id});
-                    response.listOfResponseSummary = objBLResponseSummary.ReadAll() ;
+                    var objBLResponseSummary = new blResponseSummary(new enResponseSummary() { ResponseId = response.Id });
+                    response.listOfResponseSummary = objBLResponseSummary.ReadAll();
                 }
 
                 //listOfResponses = objBLResponse.ReadAllAndAggregate(null, null, null, null, null, typeof(enResponseSummary), typeof(enOfficeMember)).Where(x => ids.Contains(x.Id)).ToList();
@@ -222,8 +225,9 @@ namespace CodeScanner.Controllers
 
                         i++;
                     }
-                    var d = date.Replace('/', '-');
-                    string p_strPath = excelPath + "\\" + d + ".xlsx";
+                    //var d = date.Replace('/', '-');
+                    var datePart = DateTime.Now.ToString("yyyyMMdd");
+                    string p_strPath = excelPath + "\\excel_" + datePart + ".xlsx";
 
                     if (System.IO.File.Exists(p_strPath))
                         System.IO.File.Delete(p_strPath);
@@ -242,21 +246,6 @@ namespace CodeScanner.Controllers
                 //Console.ReadKey();
             }
             return Json("s", JsonRequestBehavior.AllowGet);
-        }
-
-        public ActionResult GetResp()
-        {
-            var objENResponses = new enResponse();
-            var objBLResponses = new blResponse(objENResponses);
-            List<enResponse> listOfResponses = new List<enResponse>();
-            try
-            {
-                listOfResponses = objBLResponses.ReadAllAndAggregate(null, null, null, null, null, typeof(enResponseSummary));
-            }
-            catch (Exception ex)
-            {
-            }
-            return Json("s");
         }
     }
 }
