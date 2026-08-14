@@ -41,6 +41,7 @@ namespace DataAccessLayer
                 using (var conn = new SqlConnection(ApplicationSettings.DefaultConnectionString))
                 using (var cmd = new SqlCommand(sql, conn))
                 {
+                    cmd.CommandTimeout = 300; // 5 minutes timeout for large datasets
                     var p = cmd.Parameters.AddWithValue("@Ids", table);
                     p.SqlDbType = SqlDbType.Structured;
                     p.TypeName = "dbo.IntList";
@@ -73,6 +74,7 @@ namespace DataAccessLayer
                     using (var conn = new SqlConnection(ApplicationSettings.DefaultConnectionString))
                     using (var cmd = new SqlCommand(fallbackSql, conn))
                     {
+                        cmd.CommandTimeout = 300; // 5 minutes timeout for large datasets
                         conn.Open();
                         using (var dr = cmd.ExecuteReader())
                         {
@@ -125,6 +127,7 @@ namespace DataAccessLayer
                 using (var conn = new SqlConnection(ApplicationSettings.DefaultConnectionString))
                 using (var cmd = new SqlCommand(sql, conn))
                 {
+                    cmd.CommandTimeout = 300; // 5 minutes timeout for large datasets
                     var p = cmd.Parameters.AddWithValue("@Ids", table);
                     p.SqlDbType = SqlDbType.Structured;
                     // TypeName must match the user-defined table type created in the database
@@ -160,6 +163,7 @@ namespace DataAccessLayer
                     using (var conn = new SqlConnection(ApplicationSettings.DefaultConnectionString))
                     using (var cmd = new SqlCommand(fallbackSql, conn))
                     {
+                        cmd.CommandTimeout = 300; // 5 minutes timeout for large datasets
                         conn.Open();
                         using (var dr = cmd.ExecuteReader())
                         {

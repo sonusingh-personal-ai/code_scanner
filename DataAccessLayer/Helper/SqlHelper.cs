@@ -28,6 +28,7 @@ namespace DataAccessLayer
             _sqlCmd = new SqlCommand();
             _sqlCmd.Connection = GetConnection();
             _sqlCmd.CommandType = CommandType.StoredProcedure;
+            _sqlCmd.CommandTimeout = 300; // 5 minutes timeout for long-running queries
             return _sqlCmd;
         }
 
@@ -37,6 +38,7 @@ namespace DataAccessLayer
             _sqlCmd.Connection = GetConnection();
             _sqlCmd.CommandType = CommandType.StoredProcedure;
             _sqlCmd.CommandText = storedProcedure_;
+            _sqlCmd.CommandTimeout = 300; // 5 minutes timeout for long-running queries
             _sqlCmd.Parameters.Clear();
             //_sqlCmd.Connection.Open();
             return _sqlCmd;
@@ -49,6 +51,7 @@ namespace DataAccessLayer
             _sqlCmd.Transaction = objSqlTransaction_;
             _sqlCmd.CommandType = CommandType.StoredProcedure;
             _sqlCmd.CommandText = storedProcedure_;
+            _sqlCmd.CommandTimeout = 300; // 5 minutes timeout for long-running queries
             _sqlCmd.Parameters.Clear();
             return _sqlCmd;
         }

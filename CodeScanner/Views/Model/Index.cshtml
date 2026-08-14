@@ -73,6 +73,7 @@
                                         <th>Name</th>
                                         <th>Value</th>
                                         <th style="width: 40px">Edit</th>
+                                        <th style="width: 40px">Delete</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -84,7 +85,8 @@
                                         <td>
                                             @item.Value
                                         </td>
-                                        <td><a href="/model/update/@item.Id">Edit</a></td>
+                                        <td><a href="/model/update/@item.Id" title="Edit"><i class="fas fa-edit"></i></a></td>
+                                        <td><a href="javascript:void(0);" onclick="deleteModel(@item.Id, '@item.Name')" title="Delete"><i class="fas fa-trash-alt"></i></a></td>
                                     </tr>
                                         sn++;
                                     }
@@ -94,6 +96,29 @@
                     </div>
                 </div>
             }
-        </div>
     </div>
+</div>
 </section>
+
+<script>
+    function deleteModel(id, name) {
+        if (confirm('Are you sure you want to delete model: ' + name + '?')) {
+            $.ajax({
+                url: '/model/Delete',
+                type: 'POST',
+                data: { id: id },
+                success: function (response) {
+                    if (response == "s") {
+                        alert('Model deleted successfully');
+                        location.reload();
+                    } else {
+                        alert('Failed to delete model');
+                    }
+                },
+                error: function () {
+                    alert('Error occurred while deleting model');
+                }
+            });
+        }
+    }
+</script>

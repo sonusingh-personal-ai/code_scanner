@@ -35,6 +35,11 @@ namespace BusinessLogicLayer
             return GetDALReference().Update();
         }
 
+        public int Delete()
+        {
+            return GetDALReference().Delete();
+        }
+
         private DAL GetDALReference()
         {
             if (_objDAL == null)

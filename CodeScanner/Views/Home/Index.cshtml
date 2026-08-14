@@ -54,77 +54,119 @@
     }
 </style>
 
-<script src="~/Content/scripts/jquery-3.5.1.min.js"></script>
-<script>
-    $(document).ready(function(){
-        $(".main-header").hide()
-        var port = @Html.Raw(Json.Encode(ViewBag.gen));
-        var printerList = @Html.Raw(Json.Encode(ViewBag.Printers));
-        var visualByList = @Html.Raw(Json.Encode(ViewBag.VisualBy));
-        var testedByList = @Html.Raw(Json.Encode(ViewBag.TestedBy));
-        var processEngList = @Html.Raw(Json.Encode(ViewBag.ProcessEng));
-        var progDisplayNo = @Html.Raw(Json.Encode(ViewBag.ProgramDisplayNumber));
+    <script src="~/Content/scripts/jquery-3.5.1.min.js"></script>
+    <script>
+        $(document).ready(function(){
+            $(".main-header").hide()
+            var port = @Html.Raw(Json.Encode(ViewBag.gen));
+            var printerList = @Html.Raw(Json.Encode(ViewBag.Printers));
+            var visualByList = @Html.Raw(Json.Encode(ViewBag.VisualBy));
+            var testedByList = @Html.Raw(Json.Encode(ViewBag.TestedBy));
+            var processEngList = @Html.Raw(Json.Encode(ViewBag.ProcessEng));
+            var progDisplayNo = @Html.Raw(Json.Encode(ViewBag.ProgramDisplayNumber));
 
-        $("#com_port").empty();
-        $.each(port,function(indx,val){
-            $("#com_port").append("<option value='"+val.Key +"'>"+val.Value+"</option>")
-        })
+            $("#com_port").empty();
+            $.each(port,function(indx,val){
+                $("#com_port").append("<option value='"+val.Key +"'>"+val.Value+"</option>")
+            })
 
-        $("#prnter").empty();
-        $.each(printerList,function(indx,val){
-            $("#prnter").append("<option value='"+val.Key +"'>"+val.Value+"</option>")
-        })
+            $("#prnter").empty();
+            $.each(printerList,function(indx,val){
+                $("#prnter").append("<option value='"+val.Key +"'>"+val.Value+"</option>")
+            })
 
-        $("#visualBy").append("<option value=''>Select Visual By</option>")
-        $("#testedBy").append("<option value=''>Select Tested By</option>")
-        $("#processEngg").append("<option value=''>Select ProcEng.</option>")
+            $("#visualBy").append("<option value=''>Select Visual By</option>")
+            $("#testedBy").append("<option value=''>Select Tested By</option>")
+            $("#processEngg").append("<option value=''>Select ProcEng.</option>")
 
-        $.each(visualByList,function(indx,val){
-            $("#visualBy").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
-        })
-        $.each(testedByList,function(indx,val){
-            $("#testedBy").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
-        })
-        $.each(processEngList,function(indx,val){
-            $("#processEngg").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
-        })
-        $.each(progDisplayNo,function(indx,val){
-            $("#display_pv").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
-        })
+            $.each(visualByList,function(indx,val){
+                $("#visualBy").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
+            })
+            $.each(testedByList,function(indx,val){
+                $("#testedBy").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
+            })
+            $.each(processEngList,function(indx,val){
+                $("#processEngg").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
+            })
+            $.each(progDisplayNo,function(indx,val){
+                $("#display_pv").append("<option value='"+val.ID +"'>"+val.Name+"</option>")
+            })
 
-        if(port.length > 0){
-            $("#info_status").val("Enable").css("background","green")
-        }else{
-            $("#info_status").val("Disable").css("background","red")
-        }
-        setInfo()
-        validateFileds()
-
-        $('#bCode').codeScanner({
-            maxEntryTime: 500,
-            onScan: function ($element, code) {
-                $('#sysNumber').val('');
-                $('#sysNumber').val(code);
-                if (!validateProductionLine()) {
-                    alert("if production line is assembly card serial number must have valid number.");
-                    return;
-                }
-                SendToComPort(false);
+            if(port.length > 0){
+                $("#info_status").val("Enable").css("background","green")
+            }else{
+                $("#info_status").val("Disable").css("background","red")
             }
-        });
+            setInfo()
+            validateFileds()
 
-        getValueFromLocalStorage();
-        $("#productionLine").on("change",function(i,e){
-            checkProductionLine()
+            // State variable to track if first QR scan has been completed for Assembly line
+            var assemblyFirstScanDone = false;
+
+            $('#bCode').codeScanner({
+                maxEntryTime: 500,
+                onScan: function ($element, code) {
+                    $('#sysNumber').val('');
+                    $('#sysNumber').val(code);
+                    
+                    // Check if production line is Assembly (value = 2)
+                    var productionLine = $("#productionLine").val();
+                    
+                    if (productionLine == '2') {
+                        // Assembly line: First scan populates serial number, second scan executes testing
+                        if (!assemblyFirstScanDone) {
+                            // First scan: Auto-focus and populate card serial number field
+                            assemblyFirstScanDone = true;
+                            $("#serialCardNo").val(code);
+                            $("#serialCardNo").focus();
+                            
+                            // Show visual feedback that first scan is complete
+                            $("#serialCardNo").css("border-color", "green");
+                            setTimeout(function() {
+                                $("#serialCardNo").css("border-color", "");
+                            }, 500);
+                            
+                            // Don't execute testing yet, wait for second scan
+                            return;
+                        } else {
+                            // Second scan: Execute the testing
+                            assemblyFirstScanDone = false; // Reset for next cycle
+                            
+                            if (!validateProductionLine()) {
+                                alert("If production line is assembly, card serial number must have a valid number.");
+                                return;
+                            }
+                            
+                            SendToComPort(false);
+                        }
+                    } else {
+                        // Card line (value = 1): Execute testing immediately on first scan
+                        assemblyFirstScanDone = false; // Reset state
+                        
+                        if (!validateProductionLine()) {
+                            alert("If production line is assembly, card serial number must have a valid number.");
+                            return;
+                        }
+                        
+                        SendToComPort(false);
+                    }
+                }
+            });
+
+            getValueFromLocalStorage();
+            $("#productionLine").on("change",function(i,e){
+                checkProductionLine()
+                // Reset scan state when production line changes
+                assemblyFirstScanDone = false;
+            })
+
+            $('#productionLine').trigger("change");
+
+
+
+            collaps()
+            setCustomSwtich()
         })
-
-        $('#productionLine').trigger("change");
-
-
-
-        collaps()
-        setCustomSwtich()
-    })
 
     function checkProductionLine() {
         $("#serialCardNo").val('')
@@ -138,6 +180,10 @@
             $("#serialCardNo").attr("disabled","disabled").val('')
         }else if(ProdLine == '2'){
             $("#serialCardNo").removeAttr("disabled")
+            // Auto-focus on card serial number when Assembly is selected
+            setTimeout(function() {
+                $("#serialCardNo").focus();
+            }, 100);
         }
     }
 

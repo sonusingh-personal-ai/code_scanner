@@ -304,7 +304,6 @@
     <Compile Include="App_Start\RouteConfig.cs" />
     <Compile Include="Controllers\AccountController.cs" />
     <Compile Include="Controllers\BaseController.cs" />
-    <Compile Include="Controllers\ComCheckerController.cs" />
     <Compile Include="Controllers\ComPortController.cs" />
     <Compile Include="Controllers\ComPortHelperController.cs" />
     <Compile Include="Controllers\ExcelController.cs" />

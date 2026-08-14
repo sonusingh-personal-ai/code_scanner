@@ -50,6 +50,11 @@ namespace DataAccessLayer
             return base.Update(_enModel.Id, _enModel.Name, _enModel.Value, _enModel.Position, _enModel.CreatedOn, DateTime.Now);
         }
 
+        public int Delete()
+        {
+            return base.Delete(_enModel.Id);
+        }
+
         private void ConstructObject(IDataReader dr_, enModel enModel_)
         {
             enModel_.Id = Convert.ToInt32(dr_["Id"]);
