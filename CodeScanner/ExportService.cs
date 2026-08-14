@@ -19,42 +19,28 @@ namespace CodeScanner
             var objBLResponse = new blResponse(objENResponse);
 
             List<enResponse> listOfResponses = new List<enResponse>();
+            var todayString = DateTime.Now.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
             try
             {
-                // Export only today's responses
-                var startDate = DateTime.Today;
-                var endDate = startDate.AddDays(1);
-                Log.Info($"ExportService: Reading responses from {startDate:o} to {endDate:o}");
-                listOfResponses = objBLResponse.ReadAllAndAggregate(null, null, startDate, endDate, null, typeof(enResponseSummary));
-                Log.Info("ExportService: Total Reponses : " + listOfResponses.Count());
+                // Export only today's responses using CurrentDate (Method 1 - no pagination required)
+                // Note: CurrentDate is stored as string in dd/MM/yyyy format in the database
+                Log.Info($"ExportService: Reading responses for today: {todayString}");
+
+                objENResponse.CurrentDate = todayString;
+                listOfResponses = objBLResponse.ReadAllAndAggregate(null, null, null, null, todayString, typeof(enResponseSummary));
+
+                Log.Info($"ExportService: Found {listOfResponses?.Count ?? 0} responses for today");
             }
             catch (Exception ex)
             {
                 Log.Error("ExportService: Failed to read responses for today: " + ex);
+                return;
             }
 
             if (listOfResponses == null || listOfResponses.Count == 0)
             {
-                try
-                {
-                    Log.Info("ExportService: No responses found for today - falling back to last 50,000 responses");
-                    var all = objBLResponse.ReadAllAndAggregate(1, 10, null, null, null, typeof(enResponseSummary));
-                    if (all != null && all.Count > 0)
-                    {
-                        listOfResponses = all.OrderByDescending(x => x.CreatedOn).Take(50000).ToList();
-                        Log.Info($"ExportService: Fallback selected {listOfResponses.Count} responses (last by CreatedOn)");
-                    }
-                    else
-                    {
-                        Log.Info("ExportService: No responses available to export (even in fallback). Aborting.");
-                        return;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("ExportService: Failed during fallback read: " + ex);
-                    return;
-                }
+                Log.Info("ExportService: No responses found for today : "+ todayString +". Nothing to export.");
+                return;
             }
 
             // Gather office members for lookup

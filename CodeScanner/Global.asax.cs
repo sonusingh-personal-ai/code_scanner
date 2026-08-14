@@ -9,7 +9,7 @@ using Hangfire.SqlServer;
 
 namespace CodeScanner
 {
-    public class MvcApplication : System.Web.HttpApplication
+    public class MvcApplication : HttpApplication
     {
         public const string ScheduledExportJobId = "scheduled-export";
         public const int ScheduledExportHour = 22;   // 24-hour, local time (see ScheduledExportTimeZone)
