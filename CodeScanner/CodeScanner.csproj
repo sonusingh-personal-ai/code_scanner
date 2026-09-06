@@ -311,6 +311,7 @@
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ModelController.cs" />
     <Compile Include="Controllers\OfficeMemberController.cs" />
+    <Compile Include="Controllers\PrinterModelController.cs" />
     <Compile Include="Controllers\RequestQrCodeController.cs" />
     <Compile Include="Controllers\ResponseController.cs" />
     <Compile Include="Controllers\SettingController.cs" />
@@ -344,6 +345,7 @@
     <Content Include="Views\comChecker\Index.cshtml" />
     <Content Include="Views\OfficeMember\Index.cshtml" />
     <Content Include="Views\Response\Index.cshtml" />
+    <Content Include="Views\PrinterModel\Index.cshtml" />
     <None Include="Web.Debug.config">
       <DependentUpon>Web.config</DependentUpon>
     </None>

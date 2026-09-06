@@ -44,6 +44,8 @@
     <Compile Include="blDailyReport.cs" />
     <Compile Include="blModel.cs" />
     <Compile Include="blOfficeMember.cs" />
+    <Compile Include="blPrinterModel.cs" />
+    <Compile Include="blPrinterModelValue.cs" />
     <Compile Include="blResponse.cs" />
     <Compile Include="blResponseSummary.cs" />
     <Compile Include="blSetting.cs" />

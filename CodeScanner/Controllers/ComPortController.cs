@@ -1,19 +1,16 @@
 ﻿using BusinessLogicLayer;
 using Entity;
 using Entity.Util;
-using QRCoder;
+using IronBarCode;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.IO.Ports;
 using System.Linq;
+using System.Text;
 using System.Web.Mvc;
 using Utility;
-using IronBarCode;
-using System.IO;
-using System.Drawing.Printing;
-using System.Drawing.Drawing2D;
-using System.Threading.Tasks;
 
 namespace CodeScanner.Controllers
 {
@@ -128,183 +125,182 @@ namespace CodeScanner.Controllers
                 lock (_portLock)
                 {
                     Log.Info("@#Recurrence  : " + objResponse.IsRecurrence);
-                if (objResponse.IsRecurrence == false)
-                {
-                    _serialPort = new SerialPort();
-                    _serialPort.PortName = objResponse.Port;
-                    _serialPort.BaudRate = objResponse.BaudRate;
-                    _serialPort.Parity = SetPortParity(_serialPort.Parity);
-                    _serialPort.DataBits = SetPortDataBits(_serialPort.DataBits);
-                    _serialPort.StopBits = SetPortStopBits(_serialPort.StopBits);
-                    _serialPort.Handshake = SetPortHandshake(_serialPort.Handshake);
-                    _serialPort.Close();
-                    _serialPort.Dispose();
-                    _serialPort.Open();
-                    // See ReadPerLineTimeoutMs above - bounds every ReadLine() call below so a
-                    // missed/late response from the device can't block this thread forever.
-                    // _serialPort is static and reused across recurring calls, so this only
-                    // needs to be set here, on the initial (non-recurrence) open.
-                    _serialPort.ReadTimeout = ReadPerLineTimeoutMs;
-                    _serialPort.WriteLine("#" + objResponse.Barcode + "@");
-                }
-
-                List<List<string>> stringObject = new List<List<string>>();
-                DateTime now = DateTime.Now;
-                var t = 0d;
-                var count = 1;
-                #region while loop
-
-                while (t < OverallWatchdogSeconds)
-                {
-                    // Recomputed every iteration (previously this was only ever calculated
-                    // once, before the loop, and using TimeSpan.Seconds - which wraps back to
-                    // 0 every 60 seconds - so the 120s watchdog below never actually fired and
-                    // a genuinely silent device hung this request indefinitely).
-                    t = DateTime.Now.Subtract(now).TotalSeconds;
-
-                    string rec;
-                    try
+                    if (objResponse.IsRecurrence == false)
                     {
-                        rec = _serialPort.ReadLine();
-                    }
-                    catch (TimeoutException)
-                    {
-                        // Nothing arrived within ReadPerLineTimeoutMs - this is the "missed"
-                        // case. Don't treat it as fatal by itself: log it and let the overall
-                        // watchdog (t, checked at the top of this loop) decide whether to keep
-                        // waiting for the device to catch up or give up for good.
-                        Log.Error("ComPortController.SendParameter - Read timeout waiting for device response (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
-                        continue;
+                        _serialPort = new SerialPort();
+                        _serialPort.PortName = objResponse.Port;
+                        _serialPort.BaudRate = objResponse.BaudRate;
+                        _serialPort.Parity = SetPortParity(_serialPort.Parity);
+                        _serialPort.DataBits = SetPortDataBits(_serialPort.DataBits);
+                        _serialPort.StopBits = SetPortStopBits(_serialPort.StopBits);
+                        _serialPort.Handshake = SetPortHandshake(_serialPort.Handshake);
+                        _serialPort.Close();
+                        _serialPort.Dispose();
+                        _serialPort.Open();
+                        // See ReadPerLineTimeoutMs above - bounds every ReadLine() call below so a
+                        // missed/late response from the device can't block this thread forever.
+                        // _serialPort is static and reused across recurring calls, so this only
+                        // needs to be set here, on the initial (non-recurrence) open.
+                        _serialPort.ReadTimeout = ReadPerLineTimeoutMs;
+                        _serialPort.WriteLine("#" + objResponse.Barcode + "@");
                     }
 
-                    Log.Info("Receving string :- " + rec);
+                    List<List<string>> stringObject = new List<List<string>>();
+                    DateTime now = DateTime.Now;
+                    var t = 0d;
+                    var count = 1;
+                    #region while loop
 
-                    if (rec.Length != 4)
+                    while (t < OverallWatchdogSeconds)
                     {
-                        var isExist = rec.LastIndexOf("@");
-                        var CarretIndx = rec.LastIndexOf("^");
+                        // Recomputed every iteration (previously this was only ever calculated
+                        // once, before the loop, and using TimeSpan.Seconds - which wraps back to
+                        // 0 every 60 seconds - so the 120s watchdog below never actually fired and
+                        // a genuinely silent device hung this request indefinitely).
+                        t = DateTime.Now.Subtract(now).TotalSeconds;
 
-                        if (isExist > -1 && CarretIndx > -1)
+                        string rec;
+                        try
                         {
-                            var nrec = rec.Substring(isExist, (CarretIndx + 1) - isExist);
-                            Log.Info(nrec);
-                            response = nrec.Split(',');
+                            rec = _serialPort.ReadLine();
+                        }
+                        catch (TimeoutException)
+                        {
+                            // Nothing arrived within ReadPerLineTimeoutMs - this is the "missed"
+                            // case. Don't treat it as fatal by itself: log it and let the overall
+                            // watchdog (t, checked at the top of this loop) decide whether to keep
+                            // waiting for the device to catch up or give up for good.
+                            Log.Error("ComPortController.SendParameter - Read timeout waiting for device response (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
+                            continue;
+                        }
 
-                            Log.Info("response 1 : " + response[1]);
-                            Log.Info("dpn : " + objResponse.DisProgNo);
+                        Log.Info("Receving string :- " + rec);
 
-                            //if (objResponse.DisProgNo != null)
-                            //{
-                            //    response[1] = objResponse.DisProgNo;
-                            //}
+                        if (rec.Length != 4)
+                        {
+                            var isExist = rec.LastIndexOf("@");
+                            var CarretIndx = rec.LastIndexOf("^");
 
-                            Log.Info("response 2 : " + response[1]);
-
-                            var DisProgNo = objResponse.DisProgNo;
-
-                            var ConProgNo = response[2];
-                            var SysRating = response[3];
-
-                            if (response.Length > 3)
+                            if (isExist > -1 && CarretIndx > -1)
                             {
-                                Log.Info("Length");
-                                Log.Info(response.Length.ToString());
-                                var matchStr = response[response.Length - 2];
-                                var unResponsive = response[response.Length - 3];
+                                var nrec = rec.Substring(isExist, (CarretIndx + 1) - isExist);
+                                Log.Info(nrec);
+                                response = nrec.Split(',');
 
-                                if (unResponsive == "SCAN CODE")
+                                Log.Info("response 1 : " + response[1]);
+                                Log.Info("dpn : " + objResponse.DisProgNo);
+
+                                //if (objResponse.DisProgNo != null)
+                                //{
+                                //    response[1] = objResponse.DisProgNo;
+                                //}
+
+                                Log.Info("response 2 : " + response[1]);
+
+                                var DisProgNo = objResponse.DisProgNo;
+
+                                var ConProgNo = response[2];
+                                var SysRating = response[3];
+
+                                if (response.Length > 3)
                                 {
-                                    _serialPort.Close();
-                                    _serialPort.Dispose();
-                                    return Json(unResponsive, JsonRequestBehavior.AllowGet);
-                                }
+                                    Log.Info("Length");
+                                    Log.Info(response.Length.ToString());
+                                    var matchStr = response[response.Length - 2];
+                                    var unResponsive = response[response.Length - 3];
 
-                                Log.Info(matchStr);
-
-                                if (matchStr == "FAIL" || matchStr == "PASS")
-                                {
-                                    Log.Info("****** Final Result ******");
-                                    Log.Info("****** " + matchStr + " ******");
-                                    Log.Error("**** Process : " + count + "  || END ");
-                                    var objENOfficeMember = new enOfficeMember();
-                                    var objBLOfficeMember = new blOfficeMember(objENOfficeMember);
-                                    List<enOfficeMember> listOfOfficeMembers = new List<enOfficeMember>();
-                                    try
+                                    if (unResponsive == "SCAN CODE")
                                     {
-                                        listOfOfficeMembers = objBLOfficeMember.ReadAll();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        throw;
-                                    }
-
-                                    Log.Info(listOfOfficeMembers.Count.ToString());
-                                    var productinLine = objResponse.ProductionLine == 1 ? "Card" : "Assembly";
-                                    t = OverallWatchdogSeconds + 1;
-                                    if (matchStr == "FAIL")
-                                    {
-                                        Log.Info("****** Result FAIL ******");
-                                        var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, true, ConProgNo, DisProgNo, SysRating);
-                                        matchString = CompairFile(setting, response);
-                                        matchString.totalString = stringObject;
-                                        matchString.SettingInfoList = setting.SettingInfo;
-                                        matchString.model = setting.Model.Name;
-                                        matchString.isOk = true;
-                                        var QrCodeString = "BarCode : " + objResponse.Barcode + "\n visualBy : " + listOfOfficeMembers.Find(x => x.ID == objResponse.VisualBy).Name + "\n testedBy : " + listOfOfficeMembers.Find(x => x.ID == objResponse.TestedBy).Name + "\n productionLine : " + productinLine + "\n ProcessEngg. : " + listOfOfficeMembers.Find(x => x.ID == objResponse.ProcessEngg).Name + "\n currentDate : " + objResponse.CurrentDate + "\n time : " + objResponse.CurrentTime + "\n Display Program No. : " + matchString.displayPv + "\n Control Program No. : " + matchString.controlPv;
-                                        QRCodeWriter.CreateQrCode(QrCodeString, 250, QRCodeWriter.QrErrorCorrectionLevel.Medium).ChangeBarCodeColor(Color.Red).SaveAsPng(QrCodePath + "\\" + objENResponse.Barcode + "_" + objENResponse.QcStatus + ".png");
                                         _serialPort.Close();
                                         _serialPort.Dispose();
-                                        PrintQrCode(objENResponse.Barcode + "_" + objENResponse.QcStatus);//need to remove
-                                        return Json(matchString, JsonRequestBehavior.AllowGet);
+                                        return Json(unResponsive, JsonRequestBehavior.AllowGet);
+                                    }
+
+                                    Log.Info(matchStr);
+
+                                    if (matchStr == "FAIL" || matchStr == "PASS")
+                                    {
+                                        Log.Info("****** Final Result ******");
+                                        Log.Info("****** " + matchStr + " ******");
+                                        Log.Error("**** Process : " + count + "  || END ");
+                                        var objENOfficeMember = new enOfficeMember();
+                                        var objBLOfficeMember = new blOfficeMember(objENOfficeMember);
+                                        List<enOfficeMember> listOfOfficeMembers = new List<enOfficeMember>();
+                                        try
+                                        {
+                                            listOfOfficeMembers = objBLOfficeMember.ReadAll();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            throw;
+                                        }
+
+                                        Log.Info(listOfOfficeMembers.Count.ToString());
+                                        var productinLine = objResponse.ProductionLine == 1 ? "Card" : "Assembly";
+                                        t = OverallWatchdogSeconds + 1;
+                                        if (matchStr == "FAIL")
+                                        {
+                                            Log.Info("****** RESULT FAIL ******");
+                                            var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, true, ConProgNo, DisProgNo, SysRating, objResponse.PrinterModelId);
+                                            matchString = CreateMatchResult(setting, response, stringObject);
+                                            var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
+                                            QRCodeWriter.CreateQrCode(QrCodeString, 250, QRCodeWriter.QrErrorCorrectionLevel.Medium).ChangeBarCodeColor(Color.OrangeRed).SaveAsPng(QrCodePath + "\\" + objENResponse.Barcode + "_" + objENResponse.QcStatus + ".png");
+
+                                            _serialPort.Close();
+                                            _serialPort.Dispose();
+                                            return Json(matchString, JsonRequestBehavior.AllowGet);
+                                        }
+                                        else
+                                        {
+                                            Log.Info("##Setting : " + setting);
+                                            Log.Info("##Response : " + response);
+
+                                            Log.Info("****** RESULT PASS ******");
+                                            Log.Info("Model Value \n" + objResponse.VisualBy + " " + objResponse.TestedBy + " " + objResponse.ProductionLine + " " + objResponse.ProcessEngg);
+                                            var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, false, ConProgNo, DisProgNo, SysRating, objResponse.PrinterModelId);
+
+                                            matchString = CreateMatchResult(setting, response, stringObject);
+                                            var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
+                                            QRCodeWriter.CreateQrCode(QrCodeString, 250, QRCodeWriter.QrErrorCorrectionLevel.Medium).ChangeBarCodeColor(Color.Black).SaveAsPng(QrCodePath + "\\" + objResponse.Barcode + "_" + objENResponse.QcStatus + ".png");
+
+                                            _serialPort.Close();
+                                            _serialPort.Dispose();
+                                            if (objResponse.ProductionLine == 2)
+                                            {
+                                                PrintQrCode(objENResponse.Barcode + "_" + objENResponse.QcStatus, objResponse.PrinterModelId);
+                                            }
+                                            return Json(matchString, JsonRequestBehavior.AllowGet);
+                                        }
                                     }
                                     else
                                     {
-                                        Log.Info("****** Result Pass ******");
-                                        Log.Info("Model Value \n" + objResponse.VisualBy + " " + objResponse.TestedBy + " " + objResponse.ProductionLine + " " + objResponse.ProcessEngg);
-                                        var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, false, ConProgNo, DisProgNo, SysRating);
+                                        Log.Error("**** Process Start : " + count + "  || request ");
+                                        count++;
+                                        stringObject.Add(response.ToList());
                                         matchString = CompairFile(setting, response);
                                         matchString.totalString = stringObject;
                                         matchString.SettingInfoList = setting.SettingInfo;
                                         matchString.model = setting.Model.Name;
-                                        matchString.isOk = true;
-
-                                        var QrCodeString = "BarCode : " + objResponse.Barcode + "\n visualBy : " + listOfOfficeMembers.Find(x => x.ID == objResponse.VisualBy).Name + "\n testedBy : " + listOfOfficeMembers.Find(x => x.ID == objResponse.TestedBy).Name + "\n productionLine : " + productinLine + "\n ProcessEngg. : " + listOfOfficeMembers.Find(x => x.ID == objResponse.ProcessEngg).Name + "\n currentDate : " + objResponse.CurrentDate + "\n time : " + objResponse.CurrentTime + "\n Display Program No. : " + matchString.displayPv + "\n Control Program No. : " + matchString.controlPv;
-                                        QRCodeWriter.CreateQrCode(QrCodeString, 250, QRCodeWriter.QrErrorCorrectionLevel.Medium).ChangeBarCodeColor(Color.Red).SaveAsPng(QrCodePath + "\\" + objResponse.Barcode + "_" + objENResponse.QcStatus + ".png");
-                                        _serialPort.Close();
-                                        _serialPort.Dispose();
-                                        PrintQrCode(objENResponse.Barcode + "_" + objENResponse.QcStatus);
                                         return Json(matchString, JsonRequestBehavior.AllowGet);
                                     }
                                 }
-                                else
-                                {
-                                    Log.Error("**** Process Start : " + count + "  || request ");
-                                    count++;
-                                    stringObject.Add(response.ToList());
-                                    matchString = CompairFile(setting, response);
-                                    matchString.totalString = stringObject;
-                                    matchString.SettingInfoList = setting.SettingInfo;
-                                    matchString.model = setting.Model.Name;
-                                    return Json(matchString, JsonRequestBehavior.AllowGet);
-                                }
                             }
                         }
+
                     }
+                    #endregion
 
-                }
-                #endregion
-
-                // Fell out of the loop because OverallWatchdogSeconds elapsed without a
-                // PASS/FAIL - return a clear timeout result instead of hanging or handing
-                // back an empty/ambiguous object. isOk = true so the client's auto-retry
-                // (SendToComPort) stops instead of looping forever against a dead device.
-                Log.Error("ComPortController.SendParameter - Overall watchdog (" + OverallWatchdogSeconds.ToString("F0") + "s) elapsed without PASS/FAIL for Barcode=" + objResponse.Barcode);
-                _serialPort.Close();
-                _serialPort.Dispose();
-                matchString.status = (int)ResponseStatus.Fail;
-                matchString.message = "No response received from the device within " + OverallWatchdogSeconds.ToString("F0") + " seconds. Check the connection and try again.";
-                matchString.isOk = true;
-                return Json(matchString, JsonRequestBehavior.AllowGet);
+                    // Fell out of the loop because OverallWatchdogSeconds elapsed without a
+                    // PASS/FAIL - return a clear timeout result instead of hanging or handing
+                    // back an empty/ambiguous object. isOk = true so the client's auto-retry
+                    // (SendToComPort) stops instead of looping forever against a dead device.
+                    Log.Error("ComPortController.SendParameter - Overall watchdog (" + OverallWatchdogSeconds.ToString("F0") + "s) elapsed without PASS/FAIL for Barcode=" + objResponse.Barcode);
+                    _serialPort.Close();
+                    _serialPort.Dispose();
+                    matchString.status = (int)ResponseStatus.Fail;
+                    matchString.message = "No response received from the device within " + OverallWatchdogSeconds.ToString("F0") + " seconds. Check the connection and try again.";
+                    matchString.isOk = true;
+                    return Json(matchString, JsonRequestBehavior.AllowGet);
                 } // end lock (_portLock)
             }
             catch (Exception ex)
@@ -319,92 +315,128 @@ namespace CodeScanner.Controllers
             }
         }
 
-
-        //automatic print after save
-
-        public void PrintQrCode(string qrCode)
+        [HttpGet]
+        public JsonResult Print(string code, int printerModelId)
         {
-            Log.Info("Printer QrCode : " + qrCode);
+            PrintQrCode(code, printerModelId);
+            return Json(new { status = 1, message = "Print" }, JsonRequestBehavior.AllowGet);
+        }
+
+        public string GenerateQrCodeString(enResponse objResponse, List<enResponseSummary> listofResponses, List<enOfficeMember> listOfOfficeMembers, string productionLine, enSettingResponse matchString)
+        {
             try
             {
-                var folderPath = ApplicationSettings.getQrCodePath;
-                string fileNameWithExt = $"{qrCode.ToUpper()}.png";
-                string fullPath = Path.Combine(folderPath, fileNameWithExt);
-
-                if (!System.IO.File.Exists(fullPath))
+                if (objResponse == null)
                 {
-                    Log.Info("folderPath: " + folderPath);
-                    Log.Info("fileNameWithExt: " + fileNameWithExt);
-                    Log.Info("ComportController/PrinterQRCode QR Code image file not found: " + fullPath);
-                    return;
+                    Log.Warn("GenerateQrCodeString called with null objResponse.");
+                    return string.Empty;
                 }
 
-                PrintDocument pd = new PrintDocument();
-                PrinterSettings settings = new PrinterSettings();
+                Log.Debug($"Generating QR string - Model: '{objResponse.Model}', Barcode: '{objResponse.Barcode}', Line: '{productionLine}'");
 
-                pd.PrinterSettings.PrinterName = settings.PrinterName;
-                pd.DefaultPageSettings.Landscape = false;
+                string visualByName = GetMemberName(listOfOfficeMembers, objResponse.VisualBy);
+                string testedByName = GetMemberName(listOfOfficeMembers, objResponse.TestedBy);
+                string processEnggName = GetMemberName(listOfOfficeMembers, objResponse.ProcessEngg);
 
-                // -------------------------------------------------------------
-                // DIMENSIONS FOR 50mm (width) x 25mm (height):
-                // 50mm = ~197 hundredths of an inch
-                // 25mm = ~98 hundredths of an inch
-                // -------------------------------------------------------------
-                PaperSize labelSize = new PaperSize("50x25mm", 197, 98);
-                pd.DefaultPageSettings.PaperSize = labelSize;
-                pd.PrinterSettings.DefaultPageSettings.PaperSize = labelSize;
-                pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+                string displayPv = matchString?.displayPv ?? string.Empty;
+                string controlPv = matchString?.controlPv ?? string.Empty;
 
-                pd.PrintPage += (sender, args) =>
+                StringBuilder sb = new StringBuilder();
+
+                sb.AppendLine($"MODEL : {matchString.model ?? "N/A"}");
+                sb.AppendLine($"BARCODE : {objResponse.Barcode ?? "N/A"}");
+                sb.AppendLine($"VISUALBY : {visualByName ?? "N/A"}");
+                sb.AppendLine($"TESTEDBY : {testedByName ?? "N/A"}");
+                sb.AppendLine($"PRODUCTIONLINE : {productionLine ?? "N/A"}");
+                sb.AppendLine($"PROCESSENGG. : {processEnggName ?? "N/A"}");
+                sb.AppendLine($"CURRENTDATE : {objResponse.CurrentDate ?? "N/A"}");
+                sb.AppendLine($"TIME : {objResponse.CurrentTime ?? "N/A"}");
+                sb.AppendLine($"DISPLAY PROGRAM NO. : {displayPv}");
+                sb.AppendLine($"CONTROL PROGRAM NO. : {controlPv}");
+
+                if (listofResponses != null)
                 {
-                    // Crisp rendering settings for scannable QR codes
-                    args.Graphics.SmoothingMode = SmoothingMode.None;
-                    args.Graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
-                    args.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
-                    args.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
-
-                    // Size for 25mm height label (~60-65 units max height to fit text)
-                    float qrWidth = 65;
-                    float qrHeight = 65;
-
-                    // Positioning for 50x25mm label
-                    float qrX = 70;
-                    float qrY = 8;
-
-                    RectangleF qrRectangle = new RectangleF(qrX, qrY, qrWidth, qrHeight);
-
-                    // Load image safely
-                    using (FileStream fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read))
-                    using (Image image = Image.FromStream(fs))
+                    foreach (var summary in listofResponses)
                     {
-                        args.Graphics.DrawImage(image, qrRectangle);
+                        if (summary == null)
+                        {
+                            Log.Warn("Encountered null item in listofResponses");
+                            continue;
+                        }
+
+                        // Trim parameters to strip hidden '\r', '\n', or whitespace coming from serial/com ports
+                        string cleanParam = summary.Parameters?.Trim().ToUpper() ?? string.Empty;
+                        string display = summary.Dispaly?.Trim() ?? string.Empty;
+                        string actual = summary.Actual?.Trim() ?? string.Empty;
+
+                        string cleanStatus = $"{display} || {actual}";
+
+                        Log.Info($"Processing Parameter: Raw='{summary.Parameters}', Cleaned='{cleanParam}', Status='{cleanStatus}'");
+
+                        switch (cleanParam)
+                        {
+                            case "BATTERY VOLTAGE":
+                                sb.AppendLine($"BATTERY VOLTAGE : {cleanStatus}");
+                                break;
+
+                            case "OUTPUT VOLTAGE":
+                                sb.AppendLine($"OUTPUT VOLTAGE : {cleanStatus}");
+                                break;
+
+                            case "CHARGING CURRENT":
+                                sb.AppendLine($"CHARGING CURRENT : {cleanStatus}");
+                                break;
+
+                            case "SOLAR VOLTAGE":
+                                sb.AppendLine($"SOLAR VOLTAGE : {cleanStatus}");
+                                break;
+
+                            case "SOLAR CURRENT":
+                                sb.AppendLine($"SOLAR CURRENT : {cleanStatus}");
+                                break;
+
+                            default:
+                                Log.Info($"Unhandled parameter skipped: '{summary.Parameters}'");
+                                break;
+                        }
                     }
+                }
+                else
+                {
+                    Log.Warn("listofResponses is NULL.");
+                }
 
-                    // Draw text right underneath QR code
-                    float textYPosition = qrY + qrHeight + 1;
-                    RectangleF textRectangle = new RectangleF(qrX - 20, textYPosition, qrWidth + 40, 16);
+                string finalQrString = sb.ToString();
+                Log.Debug($"FINAL GENERATED QR STRING OUTPUT:\n{finalQrString}");
 
-                    using (Font textFont = new Font("Arial", 6, FontStyle.Bold))
-                    using (StringFormat format = new StringFormat())
-                    {
-                        format.Alignment = StringAlignment.Center;
-                        format.LineAlignment = StringAlignment.Near;
-                        format.FormatFlags = StringFormatFlags.NoClip;
-
-                        string textToPrint = qrCode.ToUpper();
-                        args.Graphics.DrawString(textToPrint, textFont, Brushes.Black, textRectangle, format);
-                    }
-
-                    args.HasMorePages = false;
-                };
-
-                pd.Print();
+                return finalQrString;
             }
             catch (Exception ex)
             {
-                Log.Error("/comportcontroller/PrintQrCode error while print : " + ex.ToString());
+                Log.Debug($"Error in GenerateQrCodeString. objResponse is {(objResponse == null ? "null" : "not null")}");
+                Log.Debug("Exception : " + ex.Message);
+                throw;
             }
         }
-    }
 
+        // Helper method to safely lookup names and avoid NullReferenceException
+        private static string GetMemberName(List<enOfficeMember> members, int? memberId)
+        {
+            if (members == null || !memberId.HasValue) return string.Empty;
+
+            var member = members.FirstOrDefault(x => x.ID == memberId.Value);
+            return member != null ? member.Name : string.Empty;
+        }
+
+        private enSettingResponse CreateMatchResult(enSetting setting, string[] response, List<List<string>> stringObject, bool isOk = true)
+        {
+            var matchString = CompairFile(setting, response);
+            matchString.totalString = stringObject;
+            matchString.SettingInfoList = setting.SettingInfo;
+            matchString.model = setting.Model.Name;
+            matchString.isOk = isOk;
+            return matchString;
+        }
+
+    }
 }

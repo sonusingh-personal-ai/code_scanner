@@ -16,7 +16,7 @@ namespace DataAccessLayer
 
         public int Create()
         {
-            return base.Create(_enResponse.Barcode, _enResponse.QcStatus, _enResponse.VisualBy, _enResponse.TestedBy, _enResponse.ProductionLine, _enResponse.ProcessEngg, _enResponse.SerialCardNo, _enResponse.Model, _enResponse.ConProgNo, _enResponse.DisProgNo, _enResponse.SystemRating, _enResponse.CurrentDate, _enResponse.CurrentTime, _enResponse.ResponseTime, DateTime.Now);
+            return base.Create(_enResponse.Barcode, _enResponse.QcStatus, _enResponse.VisualBy, _enResponse.TestedBy, _enResponse.ProductionLine, _enResponse.ProcessEngg, _enResponse.SerialCardNo, _enResponse.Model, _enResponse.ConProgNo, _enResponse.DisProgNo, _enResponse.SystemRating, _enResponse.CurrentDate, _enResponse.CurrentTime, _enResponse.ResponseTime, DateTime.Now, _enResponse.PrinterModelId);
         }
 
         public void Read(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null)
@@ -65,6 +65,7 @@ namespace DataAccessLayer
             enResponse_.TestedBy = Convert.ToInt32(dr_["TestedBy"]);
             enResponse_.ProductionLine = Convert.ToInt32(dr_["ProductionLine"]);
             enResponse_.ProcessEngg = Convert.ToInt32(dr_["ProcessEngg"]);
+            enResponse_.PrinterModelId = dr_["PrinterModelId"] == DBNull.Value ? (int?)null : Convert.ToInt32(dr_["PrinterModelId"]);
             enResponse_.SerialCardNo = dr_["SerialCardNo"].ToString();
             enResponse_.Model = dr_["Model"].ToString();
             enResponse_.ConProgNo = dr_["ConProgNo"].ToString();

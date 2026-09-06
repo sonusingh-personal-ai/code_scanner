@@ -46,6 +46,8 @@
     <Compile Include="enAdmin.cs" />
     <Compile Include="enCookieDetail.cs" />
     <Compile Include="enModel.cs" />
+    <Compile Include="enPrinterModel.cs" />
+    <Compile Include="enPrinterModelValue.cs" />
     <Compile Include="enResponse.cs" />
     <Compile Include="enResponseSummary.cs" />
     <Compile Include="enSettingInfo.cs" />

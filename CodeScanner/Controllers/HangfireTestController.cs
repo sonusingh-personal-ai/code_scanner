@@ -115,18 +115,6 @@ namespace CodeScanner.Controllers
         {
             var sb = new StringBuilder();
             sb.AppendLine("Recent export files:");
-            try
-            {
-                var folder = Server.MapPath("~/App_Data/Exports");
-                if (Directory.Exists(folder))
-                {
-                    var files = Directory.GetFiles(folder).OrderByDescending(f => new FileInfo(f).LastWriteTime).Take(10);
-                    foreach (var f in files) sb.AppendLine(Path.GetFileName(f));
-                }
-                else sb.AppendLine("Exports folder does not exist.");
-            }
-            catch (Exception ex) { sb.AppendLine("Error listing exports: " + ex.Message); }
-
             sb.AppendLine();
             sb.AppendLine("Recent log tail:");
             try

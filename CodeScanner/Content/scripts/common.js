@@ -146,36 +146,30 @@ function validateProductionLine() {
 
 function SendToComPort(isRecurrence) {
     getInfoValue();
-    // Prevent execution if mandatory validation fails or if any .isValidate class is present
-    if (!validateMandatoryFields() || $(".isValidate").length > 0) {
+
+    // 1. Mandatory validation check
+    if (!validateMandatoryFields() || !validatePrinterModel() || $(".isValidate").length > 0) {
         if (typeof toastersetting === 'function') {
-            toastersetting("Please fill all required mandatory fields before scanning.", "Validation Error", "error", "#FF0000");
+            toastersetting("Please select a Printer Model and fill all mandatory fields before scanning.", "Validation Error", "error", "#FF0000");
         } else {
-            alert("Please fill all required mandatory fields before scanning.");
+            alert("Please select a Printer Model and fill all mandatory fields before scanning.");
         }
         return;
     }
 
+    // 2. Production line validation check
     if (!validateProductionLine()) {
         alert("If production line is assembly, card serial number must have a valid number.");
         return;
     }
 
     if (!isRecurrence) {
-        // A brand-new scan (not a continuation of an existing one) - any responses
-        // still in flight from a previous scan are now stale.
         currentScanId++;
     }
     var scanId = currentScanId;
     $("#loadingbtn").show();
     setValueFromLocalStorage();
-    console.log(infoValue)
-    //Step-1
     checkBarcode(infoValue.barCode, infoValue.port, infoValue.baudRate, infoValue.visualby, infoValue.testedBy, infoValue.productionLine, infoValue.lineInCharge, infoValue.serialCardNo, infoValue.currentDate, infoValue.currentTime, isRecurrence, scanId);
-
-    // if (!isOk) {
-    //     setTimeout(function () { SendToComPort(true) }, 50);
-    // }
 }
 
 function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedBy, productionLine, lineInCharge, cardSerialNumber, currentDate, currentTime, isRecurrence, scanId) {
@@ -208,7 +202,7 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
                     toastersetting(resp.message, "Error", "error", "#FF0000");
                 } else {
                     //alert(resp.message);
-                    console.log("error : ",resp.message)
+                    console.log("error : ", resp.message)
                     return;
                 }
                 return;
@@ -223,9 +217,9 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             $.each(resp.interType, function (i, v) {
                 var color = "white";
                 if (v.status == 'FAIL' || v.status == 'FAULT') {
-                    color = "red"
+                    color = "#F72F35"; // Soft light red
                 } else if (v.status == 'PASS' || v.status == 'OK') {
-                    color = "green"
+                    color = "#81c57b"//light green
                 }
                 if ((i + 1) % 2 === 0) {
                     var tr = '<tr style="background:' + color + '"><td style="width:10%">' + (i + 1) + '</td> <td style="width:50%;font-weight: 700;"> ' + v.parameter + ' </td> <td style="font-weight: 700;"> ' + v.dispaly + ' </td> <td style="font-weight: 700;"> ' + v.actual + ' </td> <td style="font-weight: 700;"> ' + v.status + ' </td></tr>'
@@ -322,19 +316,27 @@ function setValueFromLocalStorage() {
     localStorage.setItem("processEngg", infoValue.processEngg);
     localStorage.setItem("display_pv", infoValue.disProgNo);
     localStorage.setItem("isDisplay_pv", infoValue.isDispProgNo);
+
+    // Save Printer Model selection
+    localStorage.setItem("printerModel", infoValue.printerModelId);
 }
 
 function getValueFromLocalStorage() {
-    $("#visualBy").val(localStorage.getItem("visualBy"))
-    $("#testedBy").val(localStorage.getItem("testedBy"))
-    $("#productionLine").val(localStorage.getItem("productionLine"))
-    $("#procEngg").val(localStorage.getItem("lineInCharge"))
-    $("#baudRate").val(localStorage.getItem("baudRate"))
-    $("#com_port").val(localStorage.getItem("port"))
-    $("#serialCardNo").val(localStorage.getItem("serialCardNo"))
-    $("#QcStatus").val(localStorage.getItem("qcStatus"))
-    $("#processEngg").val(localStorage.getItem("processEngg"))
-    $("#display_pv").val(localStorage.getItem("display_pv"))
+    $("#visualBy").val(localStorage.getItem("visualBy"));
+    $("#testedBy").val(localStorage.getItem("testedBy"));
+    $("#productionLine").val(localStorage.getItem("productionLine"));
+    $("#procEngg").val(localStorage.getItem("lineInCharge"));
+    $("#baudRate").val(localStorage.getItem("baudRate"));
+    $("#com_port").val(localStorage.getItem("port"));
+    $("#serialCardNo").val(localStorage.getItem("serialCardNo"));
+    $("#QcStatus").val(localStorage.getItem("qcStatus"));
+    $("#processEngg").val(localStorage.getItem("processEngg"));
+    $("#display_pv").val(localStorage.getItem("display_pv"));
+
+    // Auto-fill Printer Model from LocalStorage
+    if (localStorage.getItem("printerModel")) {
+        $("#printerModel").val(localStorage.getItem("printerModel")).trigger("change");
+    }
 }
 
 function getInfoValue() {
@@ -350,6 +352,7 @@ function getInfoValue() {
     infoValue.barCode = $("#sysNumber").val();//sys. sr no
     infoValue.disProgNo = $("#display_pv").val();
     infoValue.baudRate = parseInt($("#baudRate").val());//Baud Rate
+    infoValue.printerModelId = $("#printerModel").val() ? $("#printerModel option:selected").val() : "";
 }
 
 function deleteResponse(id) {
@@ -372,6 +375,7 @@ var infoValue = {
     port: "", //2
     baudRate: 0, //3
     barCode: "", //1
+    printerModelId: 0,
     isRepeat: false,//4
     isRecurrence: true,
     disProgNo: "",
@@ -422,18 +426,26 @@ function startTesting() {
     }
 }
 
-
-
 function validateFileds() {
-        // Dynamic red border validation toggle on dropdown selection changes
-        $(".validate").on("change input", function () {
-            var value = $(this).val();
-            var isEmpty = value === null || value === undefined || value === "";
+    // Dynamic red border validation toggle on dropdown selection changes
+    $(".validate").on("change input", function () {
+        var value = $(this).val();
+        var isEmpty = value === null || value === undefined || value === "";
 
-            if (isEmpty) {
-                $(this).addClass("isValidate").removeClass("validate");
-            } else {
-                $(this).removeClass("isValidate").addClass("validate");
-            }
-        });
+        if (isEmpty) {
+            $(this).addClass("isValidate").removeClass("validate");
+        } else {
+            $(this).removeClass("isValidate").addClass("validate");
+        }
+    });
+}
+
+function validatePrinterModel() {
+    var printerModelVal = $("#printerModel").val();
+    if (!printerModelVal || printerModelVal === "" || printerModelVal === "0") {
+        $("#printerModel").addClass("isValidate").removeClass("validate");
+        return false;
+    }
+    $("#printerModel").removeClass("isValidate").addClass("validate");
+    return true;
 }

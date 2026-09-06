@@ -7,7 +7,7 @@ by editing this MSBuild file. In order to learn more about this please visit htt
   <PropertyGroup>
     <TimeStampOfAssociatedLegacyPublishXmlFile />
     <_PublishTargetUrl>E:\Clients\UTL\Publish</_PublishTargetUrl>
-    <History>True|2026-08-09T07:08:19.2906402Z||;True|2026-08-09T11:57:28.2688678+05:30||;True|2026-08-09T11:44:15.1469883+05:30||;True|2026-08-09T11:17:14.9610204+05:30||;True|2026-08-08T16:37:04.3181021+05:30||;True|2026-08-08T16:18:25.8834564+05:30||;True|2026-08-08T15:07:04.9162845+05:30||;True|2026-08-08T14:54:51.4782269+05:30||;True|2026-08-08T14:39:53.7506924+05:30||;True|2026-08-08T13:46:43.1718432+05:30||;True|2026-08-08T13:31:41.1640918+05:30||;True|2026-08-07T10:33:05.2423871+05:30||;True|2026-08-07T02:48:35.3363520+05:30||;True|2026-08-02T16:16:44.7823478+05:30||;True|2026-08-02T16:00:47.5629496+05:30||;True|2026-08-02T14:37:57.7763460+05:30||;True|2026-08-02T13:35:50.9511964+05:30||;True|2026-08-02T12:59:01.5244706+05:30||;True|2026-08-02T12:00:24.2667084+05:30||;True|2026-08-02T11:58:38.6201785+05:30||;True|2026-08-02T10:32:13.5019218+05:30||;True|2026-08-01T16:17:03.1120707+05:30||;True|2026-07-26T14:04:12.6082667+05:30||;True|2026-07-26T13:25:48.5922310+05:30||;True|2026-07-26T12:50:49.2307776+05:30||;</History>
+    <History>True|2026-09-05T09:35:16.9603373Z||;True|2026-08-20T20:09:35.8459970+05:30||;False|2026-08-20T20:08:02.7324489+05:30||;True|2026-08-20T19:50:20.2496912+05:30||;True|2026-08-20T19:49:47.4338833+05:30||;True|2026-08-20T19:38:38.4758826+05:30||;True|2026-08-20T19:22:51.3491886+05:30||;True|2026-08-20T19:22:43.6242145+05:30||;True|2026-08-20T19:06:25.7886897+05:30||;True|2026-08-18T21:30:27.4527652+05:30||;False|2026-08-18T21:29:55.9931988+05:30||;False|2026-08-18T21:29:49.9104567+05:30||;True|2026-08-18T21:14:23.3136965+05:30||;True|2026-08-18T20:54:04.9961060+05:30||;True|2026-08-18T20:46:42.6121233+05:30||;True|2026-08-18T20:03:44.7975219+05:30||;True|2026-08-18T20:03:41.9117694+05:30||;True|2026-08-18T20:03:21.9317672+05:30||;True|2026-08-18T19:56:21.3095937+05:30||;True|2026-08-18T19:34:22.8969426+05:30||;True|2026-08-18T19:06:18.8455861+05:30||;True|2026-08-18T18:13:43.3427483+05:30||;True|2026-08-16T17:20:18.6336201+05:30||;False|2026-08-16T17:20:10.8340567+05:30||;True|2026-08-16T17:04:03.7736850+05:30||;True|2026-08-16T16:28:41.6695381+05:30||;True|2026-08-16T16:19:47.3323210+05:30||;True|2026-08-16T14:46:32.0387016+05:30||;True|2026-08-16T14:30:09.3113752+05:30||;True|2026-08-16T12:09:16.7616092+05:30||;True|2026-08-16T11:07:33.9388720+05:30||;True|2026-08-09T12:38:19.2906402+05:30||;True|2026-08-09T11:57:28.2688678+05:30||;True|2026-08-09T11:44:15.1469883+05:30||;True|2026-08-09T11:17:14.9610204+05:30||;True|2026-08-08T16:37:04.3181021+05:30||;True|2026-08-08T16:18:25.8834564+05:30||;True|2026-08-08T15:07:04.9162845+05:30||;True|2026-08-08T14:54:51.4782269+05:30||;True|2026-08-08T14:39:53.7506924+05:30||;True|2026-08-08T13:46:43.1718432+05:30||;True|2026-08-08T13:31:41.1640918+05:30||;True|2026-08-07T10:33:05.2423871+05:30||;True|2026-08-07T02:48:35.3363520+05:30||;True|2026-08-02T16:16:44.7823478+05:30||;True|2026-08-02T16:00:47.5629496+05:30||;True|2026-08-02T14:37:57.7763460+05:30||;True|2026-08-02T13:35:50.9511964+05:30||;True|2026-08-02T12:59:01.5244706+05:30||;True|2026-08-02T12:00:24.2667084+05:30||;True|2026-08-02T11:58:38.6201785+05:30||;True|2026-08-02T10:32:13.5019218+05:30||;True|2026-08-01T16:17:03.1120707+05:30||;True|2026-07-26T14:04:12.6082667+05:30||;True|2026-07-26T13:25:48.5922310+05:30||;True|2026-07-26T12:50:49.2307776+05:30||;</History>
     <LastFailureDetails />
   </PropertyGroup>
   <ItemGroup>
@@ -24,10 +24,10 @@ by editing this MSBuild file. In order to learn more about this please visit htt
       <publishTime>01/10/2022 02:01:26</publishTime>
     </File>
     <File Include="bin/BusinessLogicLayer.dll">
-      <publishTime>08/09/2026 12:38:16</publishTime>
+      <publishTime>08/16/2026 11:07:30</publishTime>
     </File>
     <File Include="bin/BusinessLogicLayer.pdb">
-      <publishTime>08/09/2026 12:38:16</publishTime>
+      <publishTime>08/16/2026 11:07:30</publishTime>
     </File>
     <File Include="bin/C5.dll">
       <publishTime>04/10/2012 10:58:42</publishTime>
@@ -36,31 +36,31 @@ by editing this MSBuild file. In order to learn more about this please visit htt
       <publishTime>07/17/2026 04:24:08</publishTime>
     </File>
     <File Include="bin/CodeScanner.dll">
-      <publishTime>08/09/2026 12:38:19</publishTime>
+      <publishTime>09/06/2026 12:44:24</publishTime>
     </File>
     <File Include="bin/CodeScanner.dll.config">
       <publishTime>01/01/0001 00:00:00</publishTime>
     </File>
     <File Include="bin/CodeScanner.pdb">
-      <publishTime>08/09/2026 12:38:19</publishTime>
+      <publishTime>09/06/2026 12:44:24</publishTime>
     </File>
     <File Include="bin/Common.Logging.dll">
       <publishTime>01/07/2011 09:53:58</publishTime>
     </File>
     <File Include="bin/DataAccessLayer.dll">
-      <publishTime>08/09/2026 12:38:16</publishTime>
+      <publishTime>08/16/2026 11:07:30</publishTime>
     </File>
     <File Include="bin/DataAccessLayer.pdb">
-      <publishTime>08/09/2026 12:38:16</publishTime>
+      <publishTime>08/16/2026 11:07:30</publishTime>
     </File>
     <File Include="bin/de/Hangfire.Core.resources.dll">
       <publishTime>07/17/2026 04:24:10</publishTime>
     </File>
     <File Include="bin/Entity.dll">
-      <publishTime>08/01/2026 16:17:00</publishTime>
+      <publishTime>08/16/2026 11:07:30</publishTime>
     </File>
     <File Include="bin/Entity.pdb">
-      <publishTime>08/01/2026 16:17:00</publishTime>
+      <publishTime>08/16/2026 11:07:30</publishTime>
     </File>
     <File Include="bin/EPPlus.dll">
       <publishTime>03/26/2018 00:52:42</publishTime>
@@ -420,7 +420,7 @@ by editing this MSBuild file. In order to learn more about this please visit htt
       <publishTime>11/22/2020 02:09:26</publishTime>
     </File>
     <File Include="Content/scripts/common.js">
-      <publishTime>08/09/2026 00:26:55</publishTime>
+      <publishTime>09/06/2026 12:37:31</publishTime>
     </File>
     <File Include="Content/scripts/dataTables.dateTime.min.js">
       <publishTime>04/03/2022 00:56:48</publishTime>
@@ -456,7 +456,7 @@ by editing this MSBuild file. In order to learn more about this please visit htt
       <publishTime>11/22/2020 02:10:50</publishTime>
     </File>
     <File Include="Content/scripts/response.js">
-      <publishTime>08/08/2026 23:34:28</publishTime>
+      <publishTime>08/20/2026 19:51:26</publishTime>
     </File>
     <File Include="Content/scripts/select2.full.min.js">
       <publishTime>11/22/2020 02:09:56</publishTime>
@@ -498,16 +498,19 @@ by editing this MSBuild file. In order to learn more about this please visit htt
       <publishTime>08/08/2026 09:59:16</publishTime>
     </File>
     <File Include="Views/Home/Index.cshtml">
-      <publishTime>08/09/2026 01:44:22</publishTime>
+      <publishTime>09/06/2026 12:40:52</publishTime>
     </File>
     <File Include="Views/Home/Setting.cshtml">
       <publishTime>04/26/2021 22:46:24</publishTime>
     </File>
     <File Include="Views/Model/Index.cshtml">
-      <publishTime>05/23/2021 04:27:50</publishTime>
+      <publishTime>08/09/2026 16:25:54</publishTime>
     </File>
     <File Include="Views/OfficeMember/Index.cshtml">
       <publishTime>04/02/2022 20:29:34</publishTime>
+    </File>
+    <File Include="Views/PrinterModel/Index.cshtml">
+      <publishTime>08/15/2026 00:43:30</publishTime>
     </File>
     <File Include="Views/Response/DataTable.cshtml">
       <publishTime>01/09/2022 01:57:31</publishTime>
@@ -519,7 +522,7 @@ by editing this MSBuild file. In order to learn more about this please visit htt
       <publishTime>08/08/2026 20:23:38</publishTime>
     </File>
     <File Include="Views/Shared/_Layout.cshtml">
-      <publishTime>08/08/2026 20:15:15</publishTime>
+      <publishTime>08/15/2026 15:16:30</publishTime>
     </File>
     <File Include="Views/Shared/_LoginLayout.cshtml">
       <publishTime>01/25/2021 16:40:18</publishTime>

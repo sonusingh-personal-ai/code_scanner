@@ -44,11 +44,28 @@ namespace CodeScanner.Controllers
             try
             {
                 listOfOfficeMembers = objBLOfficeMember.ReadAll();
-            }
+                        }
             catch (Exception ex)
             {
                 throw;
             }
+
+                        // Load Printer Models so the Home page can show a
+            // "Printer Model" dropdown listing all models.
+            var listOfPrinterModels = new List<enPrinterModel>();
+            var objENPrinterModel = new enPrinterModel();
+            var objBLPrinterModel = new blPrinterModel(objENPrinterModel);
+            try
+            {
+                listOfPrinterModels = objBLPrinterModel.ReadAll();
+            }
+            catch (Exception ex)
+            {
+                // graceful: leave the list empty if the table/SPs are not yet deployed
+                listOfPrinterModels = new List<enPrinterModel>();
+            }
+
+            ViewBag.PrinterModelList = listOfPrinterModels;
 
             ViewBag.VisualBy = listOfOfficeMembers.FindAll(x => x.Type == (int)Utility.OfficeMember.VisualBy);
             ViewBag.TestedBy = listOfOfficeMembers.FindAll(x => x.Type == (int)Utility.OfficeMember.TestedBy);

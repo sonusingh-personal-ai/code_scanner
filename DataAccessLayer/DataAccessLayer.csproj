@@ -45,6 +45,8 @@
     <Compile Include="dlDailyReport.cs" />
     <Compile Include="dlModel.cs" />
     <Compile Include="dlOfficeMember.cs" />
+    <Compile Include="dlPrinterModel.cs" />
+    <Compile Include="dlPrinterModelValue.cs" />
     <Compile Include="dlResponse.cs" />
     <Compile Include="dlResponseSummary.cs" />
     <Compile Include="dlSetting.cs" />
