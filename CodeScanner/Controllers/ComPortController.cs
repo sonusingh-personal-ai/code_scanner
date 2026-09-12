@@ -267,7 +267,7 @@ namespace CodeScanner.Controllers
                                             _serialPort.Dispose();
                                             if (objResponse.ProductionLine == 2)
                                             {
-                                                PrintQrCode(objENResponse.Barcode + "_" + objENResponse.QcStatus, objResponse.PrinterModelId);
+                                                PrintQrCode(objENResponse.Barcode + "_" + objENResponse.QcStatus, objResponse.PrinterModelId, QrCodeString);
                                             }
                                             return Json(matchString, JsonRequestBehavior.AllowGet);
                                         }
@@ -332,93 +332,67 @@ namespace CodeScanner.Controllers
                     return string.Empty;
                 }
 
-                Log.Debug($"Generating QR string - Model: '{objResponse.Model}', Barcode: '{objResponse.Barcode}', Line: '{productionLine}'");
-
-                string visualByName = GetMemberName(listOfOfficeMembers, objResponse.VisualBy);
                 string testedByName = GetMemberName(listOfOfficeMembers, objResponse.TestedBy);
-                string processEnggName = GetMemberName(listOfOfficeMembers, objResponse.ProcessEngg);
-
                 string displayPv = matchString?.displayPv ?? string.Empty;
                 string controlPv = matchString?.controlPv ?? string.Empty;
 
-                StringBuilder sb = new StringBuilder();
-
-                sb.AppendLine($"MODEL : {matchString.model ?? "N/A"}");
-                sb.AppendLine($"BARCODE : {objResponse.Barcode ?? "N/A"}");
-                sb.AppendLine($"VISUALBY : {visualByName ?? "N/A"}");
-                sb.AppendLine($"TESTEDBY : {testedByName ?? "N/A"}");
-                sb.AppendLine($"PRODUCTIONLINE : {productionLine ?? "N/A"}");
-                sb.AppendLine($"PROCESSENGG. : {processEnggName ?? "N/A"}");
-                sb.AppendLine($"CURRENTDATE : {objResponse.CurrentDate ?? "N/A"}");
-                sb.AppendLine($"TIME : {objResponse.CurrentTime ?? "N/A"}");
-                sb.AppendLine($"DISPLAY PROGRAM NO. : {displayPv}");
-                sb.AppendLine($"CONTROL PROGRAM NO. : {controlPv}");
+                // Populate directly from original dynamic objects (No static/testing strings)
+                List<string> parts = new List<string>
+                {
+                    $"MODEL:{matchString?.model ?? string.Empty}",
+                    $"TESTEDBY:{testedByName ?? string.Empty}",
+                    $"CURRENTDATE:{objResponse.CurrentDate ?? string.Empty}",
+                    $"DISP. PROG. NO.:{displayPv}",
+                    $"CONTROL PROG. NO.:{controlPv}"
+                };
 
                 if (listofResponses != null)
                 {
                     foreach (var summary in listofResponses)
                     {
-                        if (summary == null)
-                        {
-                            Log.Warn("Encountered null item in listofResponses");
-                            continue;
-                        }
+                        if (summary == null) continue;
 
-                        // Trim parameters to strip hidden '\r', '\n', or whitespace coming from serial/com ports
                         string cleanParam = summary.Parameters?.Trim().ToUpper() ?? string.Empty;
                         string display = summary.Dispaly?.Trim() ?? string.Empty;
                         string actual = summary.Actual?.Trim() ?? string.Empty;
-
                         string cleanStatus = $"{display} || {actual}";
-
-                        Log.Info($"Processing Parameter: Raw='{summary.Parameters}', Cleaned='{cleanParam}', Status='{cleanStatus}'");
 
                         switch (cleanParam)
                         {
                             case "BATTERY VOLTAGE":
-                                sb.AppendLine($"BATTERY VOLTAGE : {cleanStatus}");
+                            case "BATTERY VOLT.":
+                                parts.Add($"BATTERY VOLT. : {cleanStatus}");
                                 break;
-
                             case "OUTPUT VOLTAGE":
-                                sb.AppendLine($"OUTPUT VOLTAGE : {cleanStatus}");
+                            case "OUTPUT VOLT.":
+                                parts.Add($"OUTPUT VOLT. : {cleanStatus}");
                                 break;
-
                             case "CHARGING CURRENT":
-                                sb.AppendLine($"CHARGING CURRENT : {cleanStatus}");
+                                parts.Add($"CHARGING CURRENT : {cleanStatus}");
                                 break;
-
                             case "SOLAR VOLTAGE":
-                                sb.AppendLine($"SOLAR VOLTAGE : {cleanStatus}");
+                            case "SOLAR VOLT.":
+                                parts.Add($"SOLAR VOLT. : {cleanStatus}");
                                 break;
-
                             case "SOLAR CURRENT":
-                                sb.AppendLine($"SOLAR CURRENT : {cleanStatus}");
-                                break;
-
-                            default:
-                                Log.Info($"Unhandled parameter skipped: '{summary.Parameters}'");
+                                parts.Add($"SOLAR CURRENT : {cleanStatus}");
                                 break;
                         }
                     }
                 }
-                else
-                {
-                    Log.Warn("listofResponses is NULL.");
-                }
 
-                string finalQrString = sb.ToString();
-                Log.Debug($"FINAL GENERATED QR STRING OUTPUT:\n{finalQrString}");
+                // Single-line semicolon output guarantees high QR scannability on thermal labels
+                string finalQrString = string.Join("; ", parts);
+                Log.Info($"PRODUCTION QR OUTPUT: {finalQrString}");
 
                 return finalQrString;
             }
             catch (Exception ex)
             {
-                Log.Debug($"Error in GenerateQrCodeString. objResponse is {(objResponse == null ? "null" : "not null")}");
-                Log.Debug("Exception : " + ex.Message);
+                Log.Error($"Error in GenerateQrCodeString: {ex.Message}");
                 throw;
             }
         }
-
         // Helper method to safely lookup names and avoid NullReferenceException
         private static string GetMemberName(List<enOfficeMember> members, int? memberId)
         {
