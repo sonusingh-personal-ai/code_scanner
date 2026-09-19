@@ -12,8 +12,11 @@ namespace CodeScanner
     public class MvcApplication : HttpApplication
     {
         public const string ScheduledExportJobId = "scheduled-export";
-        public const int ScheduledExportHour = 22;   // 24-hour, local time (see ScheduledExportTimeZone)
-        public const int ScheduledExportMinute = 00;
+        //public const int ScheduledExportHour = 22;   // 24-hour, local time (see ScheduledExportTimeZone)
+        //public const int ScheduledExportMinute = 00;
+
+        public const int ScheduledExportHour = 21;   // 24-hour, local time (see ScheduledExportTimeZone)
+        public const int ScheduledExportMinute = 30;
 
         public static TimeZoneInfo ScheduledExportTimeZone
         {

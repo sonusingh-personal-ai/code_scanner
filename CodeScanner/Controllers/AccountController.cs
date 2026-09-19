@@ -4,8 +4,6 @@ using System.Web.Mvc;
 using Newtonsoft.Json;
 using Entity;
 using IronBarCode;
-using System.Text;
-using System.IO;
 using System.Drawing;
 using System.Drawing.Printing;
 using System.Drawing.Drawing2D;
