@@ -26,12 +26,18 @@ namespace BusinessLogicLayer
             return GetDALReference().Delelte();
         }
 
+        // Delete using an existing SqlTransaction (batch operations)
+        public int Delete(System.Data.SqlClient.SqlTransaction objSqlTransaction_)
+        {
+            return GetDALReference().Delete(objSqlTransaction_);
+        }
+
         public void Read()
         {
             GetDALReference().Read();
         }
 
-        public List<enResponse> ReadAll(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null,string searchStr = null)
+        public List<enResponse> ReadAll(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null)
         {
             return GetDALReference().ReadAll(startRowNumber, endRowNumber, startDate, endDate, searchStr);
         }
@@ -52,12 +58,20 @@ namespace BusinessLogicLayer
                 if (responseIds.Count > 0)
                 {
                     var batchDAL = new DataAccessLayer.dlResponseSummary(new enResponseSummary());
-                    var summaries = batchDAL.ReadLatestForResponseIds(responseIds);
+                    // For exports we need the full list of summaries per response so GenerateExcelController can
+                    // render parameters and actual values. ReadAllForResponseIds returns all summaries grouped by ResponseId.
+                    var allSummaries = batchDAL.ReadAllForResponseIds(responseIds);
                     foreach (var item in listOfSettings)
                     {
-                        if (summaries != null && summaries.ContainsKey(item.Id))
+                        if (allSummaries != null && allSummaries.ContainsKey(item.Id))
                         {
-                            item.ResponseSummary = summaries[item.Id];
+                            item.listOfResponseSummary = allSummaries[item.Id];
+                            // also keep the latest summary for quick access
+                            item.ResponseSummary = item.listOfResponseSummary.LastOrDefault();
+                        }
+                        else
+                        {
+                            item.listOfResponseSummary = new List<enResponseSummary>();
                         }
                     }
                 }

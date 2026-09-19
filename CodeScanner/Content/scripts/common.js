@@ -1,4 +1,5 @@
 ﻿var isOk = true;
+var currentScanId = 0;
 
 function saveSetting() {
     var tableValue = $("#settingTr > tr")
@@ -62,10 +63,10 @@ function saveResult() {
 function setInfo() {
     var dt = new Date();
     var date = pad(dt.getDate()) + "/"
-                + pad((dt.getMonth() + 1), 2) + "/"
-                + dt.getFullYear();
+        + pad((dt.getMonth() + 1), 2) + "/"
+        + dt.getFullYear();
     var time = dt.getHours() + ":" + dt.getMinutes() + ":" + dt.getSeconds();
-        
+
     console.log(date);
     $("#info_date").val(date);
     $("#info_time").val(time);
@@ -111,20 +112,67 @@ function openPort() {
     })
 }
 var respStatus = false;
-function SendToComPort(isRecurrence) {
-    $("#loadingbtn").show();
-    getInfoValue();
-    setValueFromLocalStorage();
-    console.log(infoValue)
-    //Step-1
-    checkBarcode(infoValue.barCode, infoValue.port, infoValue.baudRate, infoValue.visualby, infoValue.testedBy, infoValue.productionLine, infoValue.lineInCharge, infoValue.serialCardNo, infoValue.currentDate, infoValue.currentTime, isRecurrence);
 
-    if (!isOk) {
-        setTimeout(function () { SendToComPort(true) }, 50);
+function validateMandatoryFields() {
+    var allValid = true;
+    var firstInvalid = null;
+
+    $(".validate").each(function () {
+        var $field = $(this);
+        var value = $field.val();
+        var isEmpty = value === null || value === undefined || value === "";
+
+        if (isEmpty) {
+            $field.addClass("isValidate").removeClass("validate");
+        } else {
+            $field.removeClass("isValidate").addClass("validate");
+        }
+    });
+
+    // Move focus to the first missing required field
+    if (firstInvalid) {
+        firstInvalid.focus();
     }
+
+    return allValid;
 }
 
-function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedBy, productionLine, lineInCharge, cardSerialNumber, currentDate, currentTime, isRecurrence) {
+function validateProductionLine() {
+    if (infoValue.productionLine == 2 && infoValue.serialCardNo.length < 10) {
+        return false;
+    }
+    return true;
+}
+
+function SendToComPort(isRecurrence) {
+    getInfoValue();
+
+    // 1. Mandatory validation check
+    if (!validateMandatoryFields() || !validatePrinterModel() || $(".isValidate").length > 0) {
+        if (typeof toastersetting === 'function') {
+            toastersetting("Please select a Printer Model and fill all mandatory fields before scanning.", "Validation Error", "error", "#FF0000");
+        } else {
+            alert("Please select a Printer Model and fill all mandatory fields before scanning.");
+        }
+        return;
+    }
+
+    // 2. Production line validation check
+    if (!validateProductionLine()) {
+        alert("If production line is assembly, card serial number must have a valid number.");
+        return;
+    }
+
+    if (!isRecurrence) {
+        currentScanId++;
+    }
+    var scanId = currentScanId;
+    $("#loadingbtn").show();
+    setValueFromLocalStorage();
+    checkBarcode(infoValue.barCode, infoValue.port, infoValue.baudRate, infoValue.visualby, infoValue.testedBy, infoValue.productionLine, infoValue.lineInCharge, infoValue.serialCardNo, infoValue.currentDate, infoValue.currentTime, isRecurrence, scanId);
+}
+
+function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedBy, productionLine, lineInCharge, cardSerialNumber, currentDate, currentTime, isRecurrence, scanId) {
     $("#loadingbtn").show();
     if (isRepeat == undefined) {
         isRepeat = false;
@@ -132,18 +180,11 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
     }
     infoValue.isRecurrence = isRecurrence;
     infoValue.isRepeat = isRepeat;
-    //infoValue.disProgNo = '';
-    //if (!$("#customSwitches").prop('checked')) {
-    //    infoValue.disProgNo = $("#display_pv").val();
-    //    infoValue.isDispProgNo = true;
-    //} else {
-    //    infoValue.isDispProgNo = false;
-    //}
 
     infoValue.disProgNo = $("#display_pv").val()
 
     $.ajax({
-        async: false,
+        async: true,
         type: "POST",
         url: "/comport/SendParameter",
         data: infoValue,
@@ -152,6 +193,21 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             isOk = resp.isOk;
             $("#checkbtn").show();
             $("#loadingbtn").hide();
+            if (!isOk) {
+                setTimeout(function () { SendToComPort(true) }, 50);
+            }
+
+            if (resp && resp.message) {
+                if (typeof toastersetting === 'function') {
+                    toastersetting(resp.message, "Error", "error", "#FF0000");
+                } else {
+                    //alert(resp.message);
+                    console.log("error : ", resp.message)
+                    return;
+                }
+                return;
+            }
+
             $("#control_pv").val(resp.controlPv)
             $("#sysRating").val(resp.sysRating)
             $("#bCode").val(resp.model)
@@ -161,9 +217,9 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             $.each(resp.interType, function (i, v) {
                 var color = "white";
                 if (v.status == 'FAIL' || v.status == 'FAULT') {
-                    color = "red"
+                    color = "#F72F35"; // Soft light red
                 } else if (v.status == 'PASS' || v.status == 'OK') {
-                    color = "green"
+                    color = "#81c57b"//light green
                 }
                 if ((i + 1) % 2 === 0) {
                     var tr = '<tr style="background:' + color + '"><td style="width:10%">' + (i + 1) + '</td> <td style="width:50%;font-weight: 700;"> ' + v.parameter + ' </td> <td style="font-weight: 700;"> ' + v.dispaly + ' </td> <td style="font-weight: 700;"> ' + v.actual + ' </td> <td style="font-weight: 700;"> ' + v.status + ' </td></tr>'
@@ -197,6 +253,13 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
         error: function (xhr, status) {
             $("#checkbtn").show();
             $("#loadingbtn").hide();
+            var msg = "Request to the device failed (" + (xhr.status || status) + "). Please rescan.";
+            if (typeof toastersetting === 'function') {
+                toastersetting(msg, "Error", "error", "#FF0000");
+            } else {
+                //alert(msg);
+                console.log("error :", msg)
+            }
         }
     })
 }
@@ -217,31 +280,27 @@ $("#fileId").on('change', function () {
     getSetting(this.value)
 });
 
-function checkBarcode(barcode, port, baudRate, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense) {
+function checkBarcode(barcode, port, baudRate, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId) {
     if (!isRecurrense) {
         $.ajax({
-            async: false,
+            async: true,
             type: "GET",
             url: "/comport/checkbarcode?barCode=" + barcode + "&status=" + isRecurrense + "&qcStage=" + infoValue.qcStatus,
             success: function (resp) {
                 if (resp) {
                     var r = confirm("Barcode already tested, If you confirmed, previous entry would be delete.");
                     if (r) {
-                        insertIntoDatabase(barcode, port, baudRate, true, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense)
-                        printautomatically();
+                        insertIntoDatabase(barcode, port, baudRate, true, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId)
                     }
                 } else {
-                    insertIntoDatabase(barcode, port, baudRate, false, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense)
-                    printautomatically()
+                    insertIntoDatabase(barcode, port, baudRate, false, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId)
                 }
             },
             error: function (xhr, status) {
-                alert("error")
             }
         })
     } else {
-        insertIntoDatabase(barcode, port, baudRate, false, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense)
-        printautomatically()
+        insertIntoDatabase(barcode, port, baudRate, false, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId)
     }
 }
 
@@ -257,19 +316,27 @@ function setValueFromLocalStorage() {
     localStorage.setItem("processEngg", infoValue.processEngg);
     localStorage.setItem("display_pv", infoValue.disProgNo);
     localStorage.setItem("isDisplay_pv", infoValue.isDispProgNo);
+
+    // Save Printer Model selection
+    localStorage.setItem("printerModel", infoValue.printerModelId);
 }
 
 function getValueFromLocalStorage() {
-    $("#visualBy").val(localStorage.getItem("visualBy"))
-    $("#testedBy").val(localStorage.getItem("testedBy"))
-    $("#productionLine").val(localStorage.getItem("productionLine"))
-    $("#procEngg").val(localStorage.getItem("lineInCharge"))
-    $("#baudRate").val(localStorage.getItem("baudRate"))
-    $("#com_port").val(localStorage.getItem("port"))
-    $("#serialCardNo").val(localStorage.getItem("serialCardNo"))
-    $("#QcStatus").val(localStorage.getItem("qcStatus"))
-    $("#processEngg").val(localStorage.getItem("processEngg"))
-    $("#display_pv").val(localStorage.getItem("display_pv"))
+    $("#visualBy").val(localStorage.getItem("visualBy"));
+    $("#testedBy").val(localStorage.getItem("testedBy"));
+    $("#productionLine").val(localStorage.getItem("productionLine"));
+    $("#procEngg").val(localStorage.getItem("lineInCharge"));
+    $("#baudRate").val(localStorage.getItem("baudRate"));
+    $("#com_port").val(localStorage.getItem("port"));
+    $("#serialCardNo").val(localStorage.getItem("serialCardNo"));
+    $("#QcStatus").val(localStorage.getItem("qcStatus"));
+    $("#processEngg").val(localStorage.getItem("processEngg"));
+    $("#display_pv").val(localStorage.getItem("display_pv"));
+
+    // Auto-fill Printer Model from LocalStorage
+    if (localStorage.getItem("printerModel")) {
+        $("#printerModel").val(localStorage.getItem("printerModel")).trigger("change");
+    }
 }
 
 function getInfoValue() {
@@ -285,6 +352,7 @@ function getInfoValue() {
     infoValue.barCode = $("#sysNumber").val();//sys. sr no
     infoValue.disProgNo = $("#display_pv").val();
     infoValue.baudRate = parseInt($("#baudRate").val());//Baud Rate
+    infoValue.printerModelId = $("#printerModel").val() ? $("#printerModel option:selected").val() : "";
 }
 
 function deleteResponse(id) {
@@ -307,10 +375,11 @@ var infoValue = {
     port: "", //2
     baudRate: 0, //3
     barCode: "", //1
+    printerModelId: 0,
     isRepeat: false,//4
     isRecurrence: true,
     disProgNo: "",
-    isDispProgNo:false
+    isDispProgNo: false
 }
 
 var myVar = setInterval(myTimer, 1);
@@ -339,29 +408,6 @@ function savePath() {
     })
 }
 
-function getSelectedResponse() {
-    var responseTr = $("#example > tbody > tr");
-    var ids = getResponseIds();
-    alert("Export will Start....");
-    $.ajax({
-        async: true,
-        type: "post",
-        url: "/excel/download/",
-        data: { ids: ids },
-        success: function (resp) {
-            confirm.log(resp)
-            if (resp == "s") {
-                alert("excel successfully created")
-            } else {
-                alert("excel failed to created")
-            }
-        },
-        error: function (xhr, status) {
-            toastersetting(resp.message, resp.title, resp.type, resp.colorCode);
-        }
-    })
-}
-
 function showInputField(elm) {
     if (elm == 1) {
         $(".qrHide").show();
@@ -380,56 +426,26 @@ function startTesting() {
     }
 }
 
-function deleteAllResp() {
-    var ids = getResponseIds();
-    console.log(ids);
-    var status = confirm('Are you sure, You want to delete shown response?');
-    if (status) {
-        $.ajax({
-            async: true,
-            type: "post",
-            url: "/response/deleteAll?ids=" + ids,
-            data: { ids: ids },
-            success: function (resp) {
-                console.log(resp)
-                if (resp == "s") {
-                    alert("Selected Response successfully deleted.")
-                } else {
-                    alert("Selected Response failed to deleted.")
-                }
-                location.reload();
-            },
-            error: function (xhr, status) {
-                toastersetting(resp.message, resp.title, resp.type, resp.colorCode);
-            }
-        })
+function validateFileds() {
+    // Dynamic red border validation toggle on dropdown selection changes
+    $(".validate").on("change input", function () {
+        var value = $(this).val();
+        var isEmpty = value === null || value === undefined || value === "";
 
-    }
-}
-
-function getResponseIds() {
-    var responseTr = $("#responseTbl > tbody > tr");
-    var ids = [];
-    $.each(responseTr, function (i, v) {
-        ids.push(parseInt(responseTr[i].cells[0].textContent))
-    })
-    return ids;
-}
-
-//print after testing
-function printautomatically() {
-    var qrCode = $("#sysNumber").val();
-    var printer = $("#prnter").val();
-    $.ajax({
-        async: false,
-        type: "GET",
-        url: "/home/printqrcode?qrCode=" + qrCode + "&printerName=" + printer,
-        success: function (resp) {
-            alert("Print Done")
-        },
-        error: function (xhr, status) {
-            console.log(xhr)
-            console.log(status)
+        if (isEmpty) {
+            $(this).addClass("isValidate").removeClass("validate");
+        } else {
+            $(this).removeClass("isValidate").addClass("validate");
         }
-    })
+    });
+}
+
+function validatePrinterModel() {
+    var printerModelVal = $("#printerModel").val();
+    if (!printerModelVal || printerModelVal === "" || printerModelVal === "0") {
+        $("#printerModel").addClass("isValidate").removeClass("validate");
+        return false;
+    }
+    $("#printerModel").removeClass("isValidate").addClass("validate");
+    return true;
 }

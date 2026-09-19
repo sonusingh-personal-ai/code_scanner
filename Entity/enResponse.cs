@@ -25,6 +25,7 @@ namespace Entity
         public DateTime CreatedOn { get; set; }
         public int RecordsCount { get; set; }
         public int RowNumber { get; set; }
+        public int? PrinterModelId { get; set; }
         public List<enResponseSummary> listOfResponseSummary { get; set; }
         public enResponseSummary ResponseSummary { get; set; }
 

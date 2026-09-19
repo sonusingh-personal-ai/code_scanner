@@ -24,11 +24,8 @@
     <link rel="stylesheet" href="~/content/css/bootstrap-duallistbox.min.css">
     <!-- Theme style -->
     <link rel="stylesheet" href="~/content/css/adminlte.min.css">
-    @*<link href="~/Content/css/jquery.dataTables.min.css" rel="stylesheet" />*@
     <link href="~/Content/css/jquery.dataTables.min.css" rel="stylesheet" />
     <link href="~/Content/css/dataTables.dateTime.min.css" rel="stylesheet" />
-    @*<link rel="stylesheet" href="https://cdn.datatables.net/1.10.18/css/jquery.dataTables.min.css" />*@
-    @*<link rel="stylesheet" href="https://cdn.datatables.net/datetime/1.1.1/css/dataTables.dateTime.min.css" />*@
     @RenderSection("styles", required: false)
     <!-- Google Font: Source Sans Pro -->
     @*<link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700" rel="stylesheet">*@
@@ -104,7 +101,13 @@
                                             <p>Model</p>
                                         </a>
                                     </li>
-                                    
+                                    <li class="nav-item">
+                                        <a href="/printermodel/index" class="nav-link">
+                                            <i class="far fa-circle nav-icon"></i>
+                                            <p>Printer Model</p>
+                                        </a>
+                                    </li>
+
                                     <li class="nav-item">
                                         <a href="/officemember/index" class="nav-link">
                                             <i class="far fa-circle nav-icon"></i>

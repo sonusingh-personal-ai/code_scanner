@@ -116,7 +116,6 @@ namespace CodeScanner.Controllers
         {
             //var qrCode = "";
             //var excPath = "";
-
             //if (qrCodePath != "")
             //    qrCode = new System.Uri(qrCodePath).AbsoluteUri.Remove(0, 8);
             //if (excelPath != "")
@@ -131,6 +130,30 @@ namespace CodeScanner.Controllers
                 return Json("f", JsonRequestBehavior.AllowGet);
             }
             return Json("s", JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpPost]
+        public JsonResult Delete(int id)
+        {
+            try
+            {
+                var objENModel = new enModel { Id = id };
+                var objBLModel = new blModel(objENModel);
+                int result = objBLModel.Delete();
+                
+                if (result > 0)
+                {
+                    return Json("s", JsonRequestBehavior.AllowGet);
+                }
+                else
+                {
+                    return Json("f", JsonRequestBehavior.AllowGet);
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json("f", JsonRequestBehavior.AllowGet);
+            }
         }
     }
 }

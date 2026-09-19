@@ -28,6 +28,7 @@ namespace DataAccessLayer
             _sqlCmd = new SqlCommand();
             _sqlCmd.Connection = GetConnection();
             _sqlCmd.CommandType = CommandType.StoredProcedure;
+            _sqlCmd.CommandTimeout = 300; // 5 minutes timeout for long-running queries
             return _sqlCmd;
         }
 
@@ -37,6 +38,7 @@ namespace DataAccessLayer
             _sqlCmd.Connection = GetConnection();
             _sqlCmd.CommandType = CommandType.StoredProcedure;
             _sqlCmd.CommandText = storedProcedure_;
+            _sqlCmd.CommandTimeout = 300; // 5 minutes timeout for long-running queries
             _sqlCmd.Parameters.Clear();
             //_sqlCmd.Connection.Open();
             return _sqlCmd;
@@ -49,6 +51,7 @@ namespace DataAccessLayer
             _sqlCmd.Transaction = objSqlTransaction_;
             _sqlCmd.CommandType = CommandType.StoredProcedure;
             _sqlCmd.CommandText = storedProcedure_;
+            _sqlCmd.CommandTimeout = 300; // 5 minutes timeout for long-running queries
             _sqlCmd.Parameters.Clear();
             return _sqlCmd;
         }
@@ -69,7 +72,23 @@ namespace DataAccessLayer
 
         public void FillParameterValues(SqlCommand objSqlCommand_, string storedProcedure_, params object[] parameterValues_)
         {
-            Dictionary<string, SqlParameterCollection> cachedSQLParameters = HttpContext.Current.Cache["CachedSQLParameters"] as Dictionary<string, SqlParameterCollection>;
+            // use HttpRuntime.Cache as a fallback when HttpContext.Current is null (e.g. background threads)
+            var cache = HttpContext.Current != null ? HttpContext.Current.Cache : System.Web.HttpRuntime.Cache;
+            Dictionary<string, SqlParameterCollection> cachedSQLParameters = cache["CachedSQLParameters"] as Dictionary<string, SqlParameterCollection>;
+
+            // ensure dictionary exists in cache
+            if (cachedSQLParameters == null)
+            {
+                cachedSQLParameters = new Dictionary<string, SqlParameterCollection>();
+                try
+                {
+                    cache.Insert("CachedSQLParameters", cachedSQLParameters);
+                }
+                catch
+                {
+                    // ignore cache insert failures; keep local dictionary
+                }
+            }
 
             if (!cachedSQLParameters.ContainsKey(storedProcedure_))
             {
@@ -86,7 +105,15 @@ namespace DataAccessLayer
                 if (objSqlCommand_.Parameters != null && objSqlCommand_.Parameters.Count > 0)
                     objSqlCommand_.Parameters.RemoveAt(0);
 
-                cachedSQLParameters.Add(storedProcedure_, objSqlCommand_.Parameters);
+                // store a copy of the parameter collection for reuse
+                try
+                {
+                    cachedSQLParameters.Add(storedProcedure_, objSqlCommand_.Parameters);
+                }
+                catch
+                {
+                    // ignore duplicate add failures in race conditions
+                }
             }
             else
             {
@@ -96,9 +123,11 @@ namespace DataAccessLayer
                 }
             }
 
-            for (int i = 0; i < objSqlCommand_.Parameters.Count; i++)
+            // assign values provided by caller. Be defensive about lengths and nulls.
+            int paramCount = objSqlCommand_.Parameters.Count;
+            for (int i = 0; i < paramCount; i++)
             {
-                if (parameterValues_[i] == null)
+                if (parameterValues_ == null || i >= parameterValues_.Length || parameterValues_[i] == null)
                     objSqlCommand_.Parameters[i].Value = DBNull.Value;
                 else
                     objSqlCommand_.Parameters[i].Value = parameterValues_[i];
