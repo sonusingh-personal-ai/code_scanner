@@ -1,20 +1,42 @@
 ﻿using BusinessLogicLayer;
 using Entity;
 using Entity.Util;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Dynamic;
-using System.Globalization;
 using System.Linq;
-using System.Text;
-using System.Web;
 using System.Web.Mvc;
 
 namespace CodeScanner.Controllers
 {
     public class ResponseController : BaseController
     {
+        [HttpPost]
+        public ActionResult DirectDateExport(string targetDate)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(targetDate))
+                {
+                    return Json(new { success = false, message = "Target date is required." });
+                }
+
+                // Instantiate and directly invoke your ExportService method
+                var exportService = new CodeScanner.ExportService();
+                exportService.ExportByDate(targetDate);
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Export completed successfully for date: " + targetDate
+                });
+            }
+            catch (Exception ex)
+            {
+                try { Log.Error("DirectDateExport failed: " + ex.ToString()); } catch { }
+                return Json(new { success = false, message = "Error during export process: " + ex.Message });
+            }
+        }
+
         public ActionResult GetResponseSummary(int id)
         {
             List<enResponseSummary> listOfResponseSummary = new List<enResponseSummary>();

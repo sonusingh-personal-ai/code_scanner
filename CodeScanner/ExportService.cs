@@ -1,39 +1,54 @@
 using BusinessLogicLayer;
 using Entity;
-using OfficeOpenXml;
-using OfficeOpenXml.Style;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Web.Mvc;
 
 namespace CodeScanner
 {
     public class ExportService
     {
+        // 1. Scheduled / Hangfire entry point (defaults to today's date)
         public void ExportAll()
         {
-            Log.Info("ExportService ExportAll: Hangfire export started at " + DateTime.Now.ToString("o"));
-
-            var objENResponse = new enResponse();
-            var objBLResponse = new blResponse(objENResponse);
-
-            List<enResponse> listOfResponses = new List<enResponse>();
-            // Database stores CurrentDate in dd/MM/yyyy format (e.g. 13/09/2026).
             var todayString = DateTime.Today.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+            Log.Info($"ExportService ExportAll: Started for today ({todayString}) at " + DateTime.Now.ToString("o"));
+
+            ExecuteExport(todayString, isAuto: true);
+        }
+
+        // 2. Direct On-Demand entry point (uses passed target date)
+        public void ExportByDate(string targetDate)
+        {
+            Log.Info($"ExportService ExportByDate: Direct export requested for date '{targetDate}' at " + DateTime.Now.ToString("o"));
+
+            if (string.IsNullOrWhiteSpace(targetDate))
+            {
+                Log.Error("ExportService ExportByDate: Target date was empty or null.");
+                return;
+            }
+
+            ExecuteExport(targetDate, isAuto: false);
+        }
+
+        // 3. Shared Core Export Engine
+        private void ExecuteExport(string targetDate, bool isAuto)
+        {
+            var objENResponse = new enResponse { CurrentDate = targetDate };
+            var objBLResponse = new blResponse(objENResponse);
+            List<enResponse> listOfResponses = new List<enResponse>();
+
             try
             {
-                Log.Info($"ExportService: Reading responses for today: {todayString}");
-
-                objENResponse.CurrentDate = todayString;
+                Log.Info($"ExportService: Reading responses for date: {targetDate}");
                 listOfResponses = objBLResponse.ReadAllAndAggregate(null, null, null, null, null, typeof(enResponseSummary));
 
-                // Fallback check: if no records found with dd/MM/yyyy, try M/d/yyyy in case records exist in that format
-                if (listOfResponses == null || listOfResponses.Count == 0)
+                // Fallback format check for scheduled runs if initial format returns zero records
+                if ((listOfResponses == null || listOfResponses.Count == 0) && isAuto)
                 {
                     var altTodayString = DateTime.Today.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture);
-                    if (altTodayString != todayString)
+                    if (altTodayString != targetDate)
                     {
                         objENResponse.CurrentDate = altTodayString;
                         listOfResponses = objBLResponse.ReadAllAndAggregate(null, null, null, null, null, typeof(enResponseSummary));
@@ -44,37 +59,31 @@ namespace CodeScanner
                     }
                 }
 
-                Log.Info($"ExportService: Found {listOfResponses?.Count ?? 0} responses for today");
+                Log.Info($"ExportService: Found {listOfResponses?.Count ?? 0} responses for {targetDate}");
             }
             catch (Exception ex)
             {
-                Log.Error("ExportService: Failed to read responses for today: " + ex);
+                Log.Error($"ExportService: Failed to read responses for date {targetDate}: " + ex);
                 return;
             }
 
             if (listOfResponses == null || listOfResponses.Count == 0)
             {
-                Log.Info("ExportService: No responses found for today : " + todayString + ". Nothing to export.");
+                Log.Info($"ExportService: No responses found for date {targetDate}. Nothing to export.");
                 return;
             }
 
-            // Gather office members for lookup
-            var listOfOfficeMemeber = new List<enOfficeMember>();
+            // Load Office Members lookup once
+            var listOfOfficeMember = new List<enOfficeMember>();
             try
             {
-                Log.Info("ExportService: Loading office members for name lookup");
                 var objBLOfficeMember = new blOfficeMember(new enOfficeMember());
-                listOfOfficeMemeber = objBLOfficeMember.ReadAll();
-                Log.Info($"ExportService: Loaded {(listOfOfficeMemeber == null ? 0 : listOfOfficeMemeber.Count)} office members");
+                listOfOfficeMember = objBLOfficeMember.ReadAll() ?? new List<enOfficeMember>();
             }
             catch (Exception exOffice)
             {
                 Log.Error("ExportService: Failed to load office members: " + exOffice);
             }
-
-            // Convert office members to dictionary for O(1) fast lookup instead of List.Find O(N)
-            var officeLookup = (listOfOfficeMemeber ?? new List<enOfficeMember>())
-                .ToDictionary(x => x.ID, x => x);
 
             try
             {
@@ -88,9 +97,11 @@ namespace CodeScanner
                 if (!Directory.Exists(excelPath))
                     Directory.CreateDirectory(excelPath);
 
-                // Create files in chunks of 5000 records
+                // Chunk & File Output Logic
                 const int chunkSize = 5000;
-                var datePart = DateTime.Now.ToString("yyyyMMdd");
+                string datePart = targetDate.Replace("/", "").Replace("-", "");
+                string prefix = isAuto ? "auto_excel" : "manual_excel";
+
                 var total = listOfResponses.Count;
                 var totalFiles = (int)Math.Ceiling((double)total / chunkSize);
 
@@ -100,59 +111,37 @@ namespace CodeScanner
                     var chunk = listOfResponses.Skip(chunkStartIndex).Take(chunkSize).ToList();
                     var fileStart = chunkStartIndex + 1;
                     var fileEnd = chunkStartIndex + chunk.Count;
-                    var fileNameChunk = totalFiles > 5000 ? $"auto_excel_{datePart}_file_{fileIndex + 1}_{fileStart}_{fileEnd}.xlsx" : $"auto_excel_{datePart}_{fileEnd}.xlsx";
+
+                    var fileNameChunk = totalFiles > 1
+                        ? $"{prefix}_{datePart}_file_{fileIndex + 1}_{fileStart}_{fileEnd}.xlsx"
+                        : $"{prefix}_{datePart}_{fileEnd}.xlsx";
+
                     var fullPathChunk = Path.Combine(excelPath, fileNameChunk);
 
                     try
                     {
                         if (File.Exists(fullPathChunk))
-                        {
                             File.Delete(fullPathChunk);
-                            Log.Info("ExportService: Existing export file deleted: " + fullPathChunk);
-                        }
-                    }
-                    catch (Exception exDel)
-                    {
-                        Log.Error("ExportService: Failed to delete existing export file: " + exDel);
-                    }
 
-                    try
-                    {
-                        // Use shared Excel sheet generator
-                        var bytes = Controllers.ExcelController.GenerateExcelSheet(chunk, listOfOfficeMemeber);
+                        var bytes = Controllers.ExcelController.GenerateExcelSheet(chunk, listOfOfficeMember);
                         if (bytes == null || bytes.Length == 0)
                         {
-                            Log.Error("ExportService: Generated excel is empty for chunk " + (fileIndex + 1));
+                            Log.Error($"ExportService: Empty Excel generated for chunk {fileIndex + 1}");
                             continue;
                         }
 
-                        if (!string.IsNullOrWhiteSpace(fullPathChunk))
-                        {
-                            string directoryPath = Path.GetDirectoryName(fullPathChunk);
-                            if (!string.IsNullOrEmpty(directoryPath) && !Directory.Exists(directoryPath))
-                            {
-                                Directory.CreateDirectory(directoryPath);
-                            }
-
-                            File.WriteAllBytes(fullPathChunk, bytes);
-
-                            int responseCount = chunk.Count;
-                            Log.Info("ExportService: Export saved to " + fullPathChunk + " with " + responseCount + " responses (chunk " + (fileIndex + 1) + "/" + totalFiles + ")");
-                        }
-                        else
-                        {
-                            Log.Error("ExportService: Export failed for chunk " + (fileIndex + 1) + "/" + totalFiles + " because fullPathChunk is null or empty.");
-                        }
+                        File.WriteAllBytes(fullPathChunk, bytes);
+                        Log.Info($"ExportService: Export saved to {fullPathChunk} ({chunk.Count} records)");
                     }
                     catch (Exception exChunk)
                     {
-                        Log.Error("ExportService: Failed to export chunk " + (fileIndex + 1) + "/" + totalFiles + ": " + exChunk);
+                        Log.Error($"ExportService: Failed processing chunk {fileIndex + 1}/{totalFiles}: " + exChunk);
                     }
                 }
             }
             catch (Exception exExcel)
             {
-                Log.Error("ExportService: Failed to create export file: " + exExcel);
+                Log.Error("ExportService: Failed generating export files: " + exExcel);
             }
         }
     }
