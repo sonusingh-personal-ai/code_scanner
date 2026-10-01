@@ -1,16 +1,12 @@
-﻿using System;
+using System;
 using System.IO.Ports;
 using System.Web.Mvc;
 using Entity;
 using BusinessLogicLayer;
 using System.Collections.Generic;
 using System.Linq;
-using System.Drawing;
 using System.Drawing.Printing;
-using System.Drawing.Drawing2D;
-using System.Threading.Tasks;
 using System.Globalization;
-using System.IO;
 
 namespace CodeScanner.Controllers
 {
@@ -66,6 +62,7 @@ namespace CodeScanner.Controllers
             }
 
             ViewBag.PrinterModelList = listOfPrinterModels;
+            ViewBag.LineList = LineConfigHelper.GetLines();
 
             ViewBag.VisualBy = listOfOfficeMembers.FindAll(x => x.Type == (int)Utility.OfficeMember.VisualBy);
             ViewBag.TestedBy = listOfOfficeMembers.FindAll(x => x.Type == (int)Utility.OfficeMember.TestedBy);
@@ -78,6 +75,37 @@ namespace CodeScanner.Controllers
             ViewBag.gen = genericDropdwon;
 
             return View();
+        }
+
+        [HttpGet]
+        public JsonResult GetLines()
+        {
+            var lines = LineConfigHelper.GetLines();
+            return Json(lines, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpPost]
+        public JsonResult AddLine(string name)
+        {
+            bool success = LineConfigHelper.AddLine(name);
+            var lines = LineConfigHelper.GetLines();
+            return Json(new { success = success, lines = lines });
+        }
+
+        [HttpPost]
+        public JsonResult UpdateLine(int id, string name)
+        {
+            bool success = LineConfigHelper.UpdateLine(id, name);
+            var lines = LineConfigHelper.GetLines();
+            return Json(new { success = success, lines = lines });
+        }
+
+        [HttpPost]
+        public JsonResult DeleteLine(int id)
+        {
+            bool success = LineConfigHelper.DeleteLine(id);
+            var lines = LineConfigHelper.GetLines();
+            return Json(new { success = success, lines = lines });
         }
 
         public ActionResult Setting()

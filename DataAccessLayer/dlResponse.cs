@@ -1,4 +1,4 @@
-﻿using Entity;
+using Entity;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -16,12 +16,12 @@ namespace DataAccessLayer
 
         public int Create()
         {
-            return base.Create(_enResponse.Barcode, _enResponse.QcStatus, _enResponse.VisualBy, _enResponse.TestedBy, _enResponse.ProductionLine, _enResponse.ProcessEngg, _enResponse.SerialCardNo, _enResponse.Model, _enResponse.ConProgNo, _enResponse.DisProgNo, _enResponse.SystemRating, _enResponse.CurrentDate, _enResponse.CurrentTime, _enResponse.ResponseTime, DateTime.Now, _enResponse.PrinterModelId);
+            return base.Create(_enResponse.Barcode, _enResponse.QcStatus, _enResponse.VisualBy, _enResponse.TestedBy, _enResponse.ProductionLine, _enResponse.ProcessEngg, _enResponse.SerialCardNo, _enResponse.Model, _enResponse.ConProgNo, _enResponse.DisProgNo, _enResponse.SystemRating, _enResponse.CurrentDate, _enResponse.CurrentTime, _enResponse.ResponseTime, DateTime.Now, _enResponse.PrinterModelId, _enResponse.Line);
         }
 
-        public void Read(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null)
+        public void Read(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null, int? line = null)
         {
-            using (IDataReader idr = base.Read(startRowNumber, endRowNumber, startDate, endDate, _enResponse.CurrentDate, _enResponse.Id, _enResponse.Barcode, _enResponse.QcStatus, searchStr))
+            using (IDataReader idr = base.Read(startRowNumber, endRowNumber, startDate, endDate, _enResponse.CurrentDate, _enResponse.Id, _enResponse.Barcode, _enResponse.QcStatus, searchStr, line))
             {
                 if (idr.Read())
                 {
@@ -30,10 +30,10 @@ namespace DataAccessLayer
             }
         }
 
-        public List<enResponse> ReadAll(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null)
+        public List<enResponse> ReadAll(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null, int? line = null)
         {
             var listOfResponses = new List<enResponse>();
-            using (IDataReader idr = base.Read(startRowNumber, endRowNumber, startDate, endDate, _enResponse.CurrentDate, _enResponse.Id, _enResponse.Barcode, _enResponse.QcStatus, searchStr))
+            using (IDataReader idr = base.Read(startRowNumber, endRowNumber, startDate, endDate, _enResponse.CurrentDate, _enResponse.Id, _enResponse.Barcode, _enResponse.QcStatus, searchStr, line))
             {
                 while (idr.Read())
                 {
@@ -66,6 +66,7 @@ namespace DataAccessLayer
             enResponse_.ProductionLine = Convert.ToInt32(dr_["ProductionLine"]);
             enResponse_.ProcessEngg = Convert.ToInt32(dr_["ProcessEngg"]);
             enResponse_.PrinterModelId = dr_["PrinterModelId"] == DBNull.Value ? (int?)null : Convert.ToInt32(dr_["PrinterModelId"]);
+            enResponse_.Line = dr_["Line"] == DBNull.Value ? (int?)null : Convert.ToInt32(dr_["Line"]);
             enResponse_.SerialCardNo = dr_["SerialCardNo"].ToString();
             enResponse_.Model = dr_["Model"].ToString();
             enResponse_.ConProgNo = dr_["ConProgNo"].ToString();

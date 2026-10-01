@@ -1,4 +1,4 @@
-﻿@section styles {
+@section styles {
     <style>
         /* Status button styles */
         .cls_green {
@@ -96,6 +96,19 @@
                                 <label for="max" class="font-weight-bold">End Date</label>
                                 <input type="text" id="max" name="max" class="form-control" autocomplete="off" placeholder="DD/MM/YYYY">
                             </div>
+                            <div class="form-group col-md-2 col-sm-6 mb-0">
+                                <label for="lineFilter" class="font-weight-bold">Line</label>
+                                <select id="lineFilter" name="lineFilter" class="form-control">
+                                    <option value="">All Lines</option>
+                                    @if (ViewBag.LineList != null)
+                                    {
+                                        foreach (var l in (List<CodeScanner.LineItem>)ViewBag.LineList)
+                                        {
+                                            <option value="@l.Id">@l.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -111,6 +124,7 @@
                                         <th>Model</th>
                                         <th>Sys. Rating</th>
                                         <th>Prod. Line</th>
+                                        <th>Line</th>
                                         <th>Card Sr. No.</th>
                                         <th>T-Stage</th>
                                         <th>Visual By</th>
@@ -177,6 +191,7 @@
                     "data": function (data) {
                         data.startDate = $('#min').val();
                         data.endDate = $('#max').val();
+                        data.line = $('#lineFilter').val();
 
                         if (data.length > 6000) {
                             data.length = 6000;
@@ -190,9 +205,9 @@
                     }
                 },
                 "columnDefs": [
-                    { "targets": 11, "className": "text-center" },
                     { "targets": 12, "className": "text-center" },
-                    { "targets": 13, "className": "text-center" }
+                    { "targets": 13, "className": "text-center" },
+                    { "targets": 14, "className": "text-center" }
                 ],
                 "columns": [
                     { "data": "Id" },
@@ -201,6 +216,7 @@
                     { "data": "Model" },
                     { "data": "SysRating" },
                     { "data": "ProdLine" },
+                    { "data": "Line" },
                     { "data": "CardSerNo" },
                     { "data": "QcStatus" },
                     { "data": "VisualBy" },
@@ -224,8 +240,8 @@
                 }
             });
 
-            // 3. Trigger table redraw on date changes
-            $('#min, #max').on('change', function () {
+            // 3. Trigger table redraw on date and line filter changes
+            $('#min, #max, #lineFilter').on('change', function () {
                 table.draw();
             });
 

@@ -1,4 +1,4 @@
-﻿using Entity;
+using Entity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,9 +37,9 @@ namespace BusinessLogicLayer
             GetDALReference().Read();
         }
 
-        public List<enResponse> ReadAll(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null)
+        public List<enResponse> ReadAll(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null, int? line = null)
         {
-            return GetDALReference().ReadAll(startRowNumber, endRowNumber, startDate, endDate, searchStr);
+            return GetDALReference().ReadAll(startRowNumber, endRowNumber, startDate, endDate, searchStr, line);
         }
 
         public void ReadAndAggregate(params Type[] entityToAggregate_)
@@ -50,7 +50,12 @@ namespace BusinessLogicLayer
 
         public List<enResponse> ReadAllAndAggregate(int? startRowNumber = null, int? endRowNumber = null, DateTime? startDate = null, DateTime? endDate = null, string searchStr = null, params Type[] entityToAggregate_)
         {
-            List<enResponse> listOfSettings = ReadAll(startRowNumber, endRowNumber, startDate, endDate, searchStr);
+            return ReadAllAndAggregate(startRowNumber, endRowNumber, startDate, endDate, searchStr, null, entityToAggregate_);
+        }
+
+        public List<enResponse> ReadAllAndAggregate(int? startRowNumber, int? endRowNumber, DateTime? startDate, DateTime? endDate, string searchStr, int? line, params Type[] entityToAggregate_)
+        {
+            List<enResponse> listOfSettings = ReadAll(startRowNumber, endRowNumber, startDate, endDate, searchStr, line);
             if (entityToAggregate_.FirstOrDefault(item => item == typeof(enResponseSummary)) != null)
             {
                 // Batch load latest summaries for all responses to avoid N+1 queries

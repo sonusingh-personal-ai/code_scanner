@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,6 +16,7 @@ namespace Entity.Util
         public string VisualBy { get; set; }
         public string TestedBy { get; set; }
         public string ProdLine { get; set; }
+        public string Line { get; set; }
         public string QcStatus { get; set; }
         public string ProcEng { get; set; }
         public string CardSerNo { get; set; }

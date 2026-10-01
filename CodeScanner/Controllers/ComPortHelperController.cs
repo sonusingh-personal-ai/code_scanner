@@ -1,4 +1,4 @@
-﻿using BusinessLogicLayer;
+using BusinessLogicLayer;
 using Entity;
 using Entity.Util;
 using QRCoder; // Uses your project's existing QRCoder library
@@ -205,7 +205,7 @@ namespace CodeScanner.Controllers
             return (Handshake)Enum.Parse(typeof(Handshake), handshake);
         }
 
-        public static List<enResponseSummary> SaveReponse(enSetting setting, string[] response, string barcode, bool isOk, int qcStatus, int visualby, int testedBy, int productionLine, int processEngg, string testingJig, string currentDate, string Time, bool barCodeStatus, string ConProgNo, string DisProgNo, string SysRating, int? printerModelId = null)
+        public static List<enResponseSummary> SaveReponse(enSetting setting, string[] response, string barcode, bool isOk, int qcStatus, int visualby, int testedBy, int productionLine, int processEngg, string testingJig, string currentDate, string Time, bool barCodeStatus, string ConProgNo, string DisProgNo, string SysRating, int? printerModelId = null, int? line = null)
         {
             var objENResponse = new enResponse() { Barcode = barcode, QcStatus = qcStatus };
             var objBLResponse = new blResponse(objENResponse);
@@ -228,6 +228,7 @@ namespace CodeScanner.Controllers
                 objENResponse.ProductionLine = productionLine;
                 objENResponse.SerialCardNo = testingJig;
                 objENResponse.PrinterModelId = printerModelId;
+                objENResponse.Line = line;
                 objENResponse.ConProgNo = ConProgNo;
                 objENResponse.DisProgNo = DisProgNo;
                 objENResponse.SystemRating = SysRating;

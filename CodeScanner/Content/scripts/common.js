@@ -1,4 +1,4 @@
-﻿var isOk = true;
+var isOk = true;
 var currentScanId = 0;
 
 function saveSetting() {
@@ -148,11 +148,11 @@ function SendToComPort(isRecurrence) {
     getInfoValue();
 
     // 1. Mandatory validation check
-    if (!validateMandatoryFields() || !validatePrinterModel() || $(".isValidate").length > 0) {
+    if (!validateMandatoryFields() || !validatePrinterModel() || !validateLine() || $(".isValidate").length > 0) {
         if (typeof toastersetting === 'function') {
-            toastersetting("Please select a Printer Model and fill all mandatory fields before scanning.", "Validation Error", "error", "#FF0000");
+            toastersetting("Please select a Line, Printer Model and fill all mandatory fields before scanning.", "Validation Error", "error", "#FF0000");
         } else {
-            alert("Please select a Printer Model and fill all mandatory fields before scanning.");
+            alert("Please select a Line, Printer Model and fill all mandatory fields before scanning.");
         }
         return;
     }
@@ -319,6 +319,9 @@ function setValueFromLocalStorage() {
 
     // Save Printer Model selection
     localStorage.setItem("printerModel", infoValue.printerModelId);
+
+    // Save Line selection
+    localStorage.setItem("selectedLine", infoValue.line);
 }
 
 function getValueFromLocalStorage() {
@@ -337,6 +340,11 @@ function getValueFromLocalStorage() {
     if (localStorage.getItem("printerModel")) {
         $("#printerModel").val(localStorage.getItem("printerModel")).trigger("change");
     }
+
+    // Auto-fill Line from LocalStorage
+    if (localStorage.getItem("selectedLine")) {
+        $("#lineSelect").val(localStorage.getItem("selectedLine")).trigger("change");
+    }
 }
 
 function getInfoValue() {
@@ -353,6 +361,7 @@ function getInfoValue() {
     infoValue.disProgNo = $("#display_pv").val();
     infoValue.baudRate = parseInt($("#baudRate").val());//Baud Rate
     infoValue.printerModelId = $("#printerModel").val() ? $("#printerModel option:selected").val() : "";
+    infoValue.line = $("#lineSelect").val() ? $("#lineSelect option:selected").val() : "";
 }
 
 function deleteResponse(id) {
@@ -376,6 +385,7 @@ var infoValue = {
     baudRate: 0, //3
     barCode: "", //1
     printerModelId: 0,
+    line: "",
     isRepeat: false,//4
     isRecurrence: true,
     disProgNo: "",
@@ -447,5 +457,15 @@ function validatePrinterModel() {
         return false;
     }
     $("#printerModel").removeClass("isValidate").addClass("validate");
+    return true;
+}
+
+function validateLine() {
+    var lineVal = $("#lineSelect").val();
+    if (!lineVal || lineVal === "" || lineVal === "0") {
+        $("#lineSelect").addClass("isValidate").removeClass("validate");
+        return false;
+    }
+    $("#lineSelect").removeClass("isValidate").addClass("validate");
     return true;
 }
