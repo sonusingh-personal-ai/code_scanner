@@ -1,4 +1,4 @@
-﻿@section styles {
+@section styles {
     <style>
         /* Status button styles */
         .cls_green {
@@ -36,6 +36,16 @@
             margin: 0;
             text-align: right;
         }
+
+        /* Small icon button for header */
+        .btn-icon-square {
+            width: 38px;
+            height: 38px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 }
 
@@ -45,9 +55,24 @@
             <div class="col-md-12">
                 <div class="card card-outline card-primary shadow-sm">
 
-                    <!-- Card Header with Title, Status Message & Action Buttons -->
+                    <!-- Card Header with Title, Middle Date & Standalone Fetch Button -->
                     <div class="card-header d-flex justify-content-between align-items-center py-1">
-                        <h3 class="card-title font-weight-bold mb-0">Response Table</h3>
+                        <div class="d-flex align-items-center">
+                            <h3 class="card-title font-weight-bold mb-0 mr-3">Response Table</h3>
+
+                            <!-- Standalone Middle Date Input -->
+                          <input type="text" class="form-control datepicker mr-2" id="mid" name="mid" 
+       autocomplete="off" 
+       value="@DateTime.Now.ToString("dd/MM/yyyy")" 
+       placeholder="DD/MM/YYYY" 
+       style="width: 150px;">    <!-- Standalone Fetch Button (Calls custom Header function) -->
+                            <button id="btnHeaderFetch" class="btn btn-secondary btn-icon-square" onclick="handleHeaderDateFetch()" title="Fetch Data">
+                                <span class="fa-stack fa-xs" style="font-size: 0.8em;">
+                                    <i class="fas fa-database fa-stack-1x" style="margin-top: -3px;"></i>
+                                    <i class="fas fa-arrow-down fa-stack-1x text-light" style="margin-top: 5px; font-size: 0.7em;"></i>
+                                </span>
+                            </button>
+                        </div>
 
                         <div class="ml-auto d-flex align-items-center">
                             <span id="statusMessage" class="mr-3 font-weight-bold" style="display: none; color: #d9534f;"></span>
@@ -71,6 +96,19 @@
                                 <label for="max" class="font-weight-bold">End Date</label>
                                 <input type="text" id="max" name="max" class="form-control" autocomplete="off" placeholder="DD/MM/YYYY">
                             </div>
+                            <div class="form-group col-md-2 col-sm-6 mb-0">
+                                <label for="lineFilter" class="font-weight-bold">Line</label>
+                                <select id="lineFilter" name="lineFilter" class="form-control">
+                                    <option value="">All Lines</option>
+                                    @if (ViewBag.LineList != null)
+                                    {
+                                        foreach (var l in (List<CodeScanner.LineItem>)ViewBag.LineList)
+                                        {
+                                            <option value="@l.Id">@l.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -86,6 +124,7 @@
                                         <th>Model</th>
                                         <th>Sys. Rating</th>
                                         <th>Prod. Line</th>
+                                        <th>Line</th>
                                         <th>Card Sr. No.</th>
                                         <th>T-Stage</th>
                                         <th>Visual By</th>
@@ -119,6 +158,19 @@
                 maxDate = new DateTime($('#max'), { format: 'DD/MM/YYYY' });
             }
 
+            // Standard jQuery UI / Bootstrap Datepicker
+            if ($.fn.datepicker) {
+                $('#mid').datepicker({
+                    format: 'dd/mm/yyyy',
+                    autoclose: true,
+                    todayHighlight: true
+                });
+            } 
+            // Or if using the DateTime plugin from DataTables
+            else if (typeof DateTime !== 'undefined') {
+                new DateTime($('#mid'), { format: 'DD/MM/YYYY' });
+            }
+
             // 2. Single DataTable Initialization
             table = $('#responseTbl').DataTable({
                 "processing": true,
@@ -139,6 +191,7 @@
                     "data": function (data) {
                         data.startDate = $('#min').val();
                         data.endDate = $('#max').val();
+                        data.line = $('#lineFilter').val();
 
                         if (data.length > 6000) {
                             data.length = 6000;
@@ -152,9 +205,9 @@
                     }
                 },
                 "columnDefs": [
-                    { "targets": 11, "className": "text-center" },
                     { "targets": 12, "className": "text-center" },
-                    { "targets": 13, "className": "text-center" }
+                    { "targets": 13, "className": "text-center" },
+                    { "targets": 14, "className": "text-center" }
                 ],
                 "columns": [
                     { "data": "Id" },
@@ -163,6 +216,7 @@
                     { "data": "Model" },
                     { "data": "SysRating" },
                     { "data": "ProdLine" },
+                    { "data": "Line" },
                     { "data": "CardSerNo" },
                     { "data": "QcStatus" },
                     { "data": "VisualBy" },
@@ -186,8 +240,8 @@
                 }
             });
 
-            // 3. Trigger table redraw on date changes
-            $('#min, #max').on('change', function () {
+            // 3. Trigger table redraw on date and line filter changes
+            $('#min, #max, #lineFilter').on('change', function () {
                 table.draw();
             });
 
@@ -196,6 +250,13 @@
                 collaps();
             }
         });
+
+        // Independent custom function for the new header fetch button
+        function handleHeaderDateFetch() {
+            var selectedDate = $('#mid').val();
+            console.log("Selected Header Date:", selectedDate);
+            // Place your custom UI logic here without affecting DataTables or Database requests
+        }
 
         // Background styling helpers
         function changeBackGroup() {
@@ -206,6 +267,54 @@
             $(".cls_green").css("background-color", "green").css("color", "#fff");
             $(".cls_red").css("background-color", "red").css("color", "#fff");
         }
+
+      function handleHeaderDateFetch() {
+        var selectedDate = $('#mid').val();
+
+        if (!selectedDate) {
+            if (typeof toastersetting === 'function') {
+                toastersetting("Please select a date first.", "Warning", "warning", "#f0ad4e");
+            } else {
+                alert("Please select a date first.");
+            }
+            return;
+        }
+
+        var $btn = $('#btnHeaderFetch');
+        $btn.prop('disabled', true).addClass('disabled');
+
+        $.ajax({
+            url: '/Response/DirectDateExport',
+            type: 'POST',
+            data: { targetDate: selectedDate },
+            success: function (res) {
+                $btn.prop('disabled', false).removeClass('disabled');
+
+                if (res.success) {
+                    if (typeof toastersetting === 'function') {
+                        toastersetting(res.message, "Success", "success", "#28a745");
+                    } else {
+                        alert(res.message);
+                    }
+
+                    // Refresh response count badge if visible
+                    if (typeof fetchResponseCount === 'function') {
+                        fetchResponseCount();
+                    }
+                } else {
+                    if (typeof toastersetting === 'function') {
+                        toastersetting(res.message, "Error", "error", "#dc3545");
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            },
+            error: function (xhr, status, error) {
+                $btn.prop('disabled', false).removeClass('disabled');
+                alert("Error processing export: " + error);
+            }
+        });
+}
     </script>
 
     <script src="~/Content/scripts/response.js"></script>

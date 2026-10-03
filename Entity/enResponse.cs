@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Entity
@@ -26,6 +26,7 @@ namespace Entity
         public int RecordsCount { get; set; }
         public int RowNumber { get; set; }
         public int? PrinterModelId { get; set; }
+        public int? Line { get; set; }
         public List<enResponseSummary> listOfResponseSummary { get; set; }
         public enResponseSummary ResponseSummary { get; set; }
 

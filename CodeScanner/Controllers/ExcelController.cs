@@ -1,4 +1,4 @@
-﻿using OfficeOpenXml;
+using OfficeOpenXml;
 using OfficeOpenXml.Style;
 using BusinessLogicLayer;
 using Entity;
@@ -79,6 +79,41 @@ namespace CodeScanner.Controllers
                 Log.Error("Error fetching office members: " + ex.Message);
             }
 
+            try
+            {
+                var bytes = GenerateExcelSheet(listOfResponses, listOfOfficeMemeber);
+                if (bytes == null || bytes.Length == 0)
+                {
+                    return Json("Generated excel is empty.", JsonRequestBehavior.AllowGet);
+                }
+
+                // File Creation & Writing
+                var datePart = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string p_strPath = System.IO.Path.Combine(excelPath, $"excel_{datePart}.xlsx");
+
+                System.IO.File.WriteAllBytes(p_strPath, bytes);
+
+                return Json("s", JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Error in ExportToExcel: " + ex.Message);
+                return Json(ex.Message, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        public static byte[] generateExcelSheet(List<enResponse> listOfResponses, List<enOfficeMember> listOfOfficeMemeber)
+        {
+            return GenerateExcelSheet(listOfResponses, listOfOfficeMemeber);
+        }
+
+        public static byte[] GenerateExcelSheet(List<enResponse> listOfResponses, List<enOfficeMember> listOfOfficeMemeber)
+        {
+            if (listOfResponses == null || listOfResponses.Count == 0)
+            {
+                return null;
+            }
+
             // Trackers for exact cell coordinates in case of error
             int currentRow = 0;
             int currentCol = 0;
@@ -89,8 +124,11 @@ namespace CodeScanner.Controllers
                 using (ExcelPackage excel = new ExcelPackage())
                 {
                     // Clean sheet name (Excel worksheet names must be <= 31 chars and non-null/non-empty)
-                    string rawModelName = listOfResponses[0]?.Model;
-                    string sheetName = string.IsNullOrWhiteSpace(rawModelName) ? "Sheet1" : rawModelName;
+                    string rawModelName = (listOfResponses != null && listOfResponses.Count > 0 && listOfResponses[0] != null)
+                        ? listOfResponses[0].Model
+                        : null;
+
+                    string sheetName = string.IsNullOrWhiteSpace(rawModelName) ? "Sheet1" : rawModelName.Trim();
                     if (sheetName.Length > 31) sheetName = sheetName.Substring(0, 31);
 
                     var workSheet = excel.Workbook.Worksheets.Add(sheetName);
@@ -139,7 +177,9 @@ namespace CodeScanner.Controllers
                         workSheet.Cells[4, j].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                         workSheet.Cells[4, j, 4, k].Merge = true;
 
-                        var visualObj = listOfOfficeMemeber.FirstOrDefault(x => x != null && x.ID == item.VisualBy);
+                        var visualObj = listOfOfficeMemeber != null
+                            ? listOfOfficeMemeber.FirstOrDefault(x => x != null && x.ID == item.VisualBy)
+                            : null;
                         workSheet.Cells[4, j].Value = (visualObj != null && !string.IsNullOrEmpty(visualObj.Name)) ? visualObj.Name : "";
 
                         // PRO LINE
@@ -163,7 +203,9 @@ namespace CodeScanner.Controllers
                         workSheet.Cells[6, j].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                         workSheet.Cells[6, j, 6, k].Merge = true;
 
-                        var testedObj = listOfOfficeMemeber.FirstOrDefault(x => x != null && x.ID == item.TestedBy);
+                        var testedObj = listOfOfficeMemeber != null
+                            ? listOfOfficeMemeber.FirstOrDefault(x => x != null && x.ID == item.TestedBy)
+                            : null;
                         workSheet.Cells[6, j].Value = (testedObj != null && !string.IsNullOrEmpty(testedObj.Name)) ? testedObj.Name : "";
 
                         // Card Serial Number
@@ -244,7 +286,9 @@ namespace CodeScanner.Controllers
                         if (!string.IsNullOrWhiteSpace(disProgStr) && int.TryParse(disProgStr, out numericValue))
                         {
                             // Match ID safely with null checks
-                            var disProgObj = listOfOfficeMemeber.FirstOrDefault(x => x != null && x.ID == numericValue);
+                            var disProgObj = listOfOfficeMemeber != null
+                                ? listOfOfficeMemeber.FirstOrDefault(x => x != null && x.ID == numericValue)
+                                : null;
 
                             workSheet.Cells[12, j].Value = (disProgObj != null && !string.IsNullOrEmpty(disProgObj.Name))
                                                             ? disProgObj.Name
@@ -310,20 +354,20 @@ namespace CodeScanner.Controllers
                         i++;
                     }
 
-                    // File Creation & Writing
-                    var datePart = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                    string p_strPath = System.IO.Path.Combine(excelPath, $"excel_{datePart}.xlsx");
+                    // AutoFit columns across worksheet dimension safely
+                    if (workSheet.Dimension != null)
+                    {
+                        workSheet.Cells[workSheet.Dimension.Address].AutoFitColumns();
+                    }
 
-                    System.IO.File.WriteAllBytes(p_strPath, excel.GetAsByteArray());
-
-                    return Json("s", JsonRequestBehavior.AllowGet);
+                    return excel.GetAsByteArray();
                 }
             }
             catch (Exception ex)
             {
                 string errorDetails = $"Failed at Field: [{currentFieldLabel}] | Cell Address: Row {currentRow}, Column {currentCol} | Exception: {ex.Message}";
-                Log.Error("Error in ExportToExcel: " + errorDetails);
-                return Json(errorDetails, JsonRequestBehavior.AllowGet);
+                Log.Error("Error in GenerateExcelSheet: " + errorDetails);
+                throw new Exception(errorDetails, ex);
             }
         }
     }

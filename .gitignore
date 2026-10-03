@@ -1,5 +1,13 @@
-﻿.vs/
+.vs/
 **/.vs/
 .vs/*
 bin/
 obj/
+
+# Log files and directories
+[Ll]og/
+[Ll]ogs/
+**/[Ll]og/
+**/[Ll]ogs/
+*.log
+*Custom_Log.txt

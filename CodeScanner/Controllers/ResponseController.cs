@@ -1,20 +1,42 @@
-﻿using BusinessLogicLayer;
+using BusinessLogicLayer;
 using Entity;
 using Entity.Util;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Dynamic;
-using System.Globalization;
 using System.Linq;
-using System.Text;
-using System.Web;
 using System.Web.Mvc;
 
 namespace CodeScanner.Controllers
 {
     public class ResponseController : BaseController
     {
+        [HttpPost]
+        public ActionResult DirectDateExport(string targetDate)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(targetDate))
+                {
+                    return Json(new { success = false, message = "Target date is required." });
+                }
+
+                // Instantiate and directly invoke your ExportService method
+                var exportService = new CodeScanner.ExportService();
+                exportService.ExportByDate(targetDate);
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Export completed successfully for date: " + targetDate
+                });
+            }
+            catch (Exception ex)
+            {
+                try { Log.Error("DirectDateExport failed: " + ex.ToString()); } catch { }
+                return Json(new { success = false, message = "Error during export process: " + ex.Message });
+            }
+        }
+
         public ActionResult GetResponseSummary(int id)
         {
             List<enResponseSummary> listOfResponseSummary = new List<enResponseSummary>();
@@ -126,6 +148,7 @@ namespace CodeScanner.Controllers
 
         public ActionResult index()
         {
+            ViewBag.LineList = LineConfigHelper.GetLines();
             return View();
         }
 
@@ -148,6 +171,13 @@ namespace CodeScanner.Controllers
 
             string startDate = Request.Form["startDate"];
             string endDate = Request.Form["endDate"];
+            string lineStr = Request.Form["line"];
+            int? line = null;
+            int parsedLine = 0;
+            if (!string.IsNullOrEmpty(lineStr) && int.TryParse(lineStr, out parsedLine) && parsedLine > 0)
+            {
+                line = parsedLine;
+            }
 
             #region response from database
             List<enResponse> listOfResponse = new List<enResponse>();
@@ -162,28 +192,21 @@ namespace CodeScanner.Controllers
                 {
                     DateTime sDate = DateTime.ParseExact(startDate, "dd/MM/yyyy", null);
                     DateTime eDate = DateTime.ParseExact(endDate, "dd/MM/yyyy", null);
-                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, sDate, eDate.AddDays(1), searchby.ToUpper(), typeof(enResponseSummary));
-                    // Apply client-side filtering correctly (previous code did not assign the filtered result)
-                    listOfResponse = listOfResponse.Where(x =>
-                        (x.Barcode != null && x.Barcode.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
-                        || (x.Model != null && x.Model.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
-                        || (x.SystemRating != null && x.SystemRating.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
-                        || (x.SerialCardNo != null && x.SerialCardNo.IndexOf(searchby, StringComparison.OrdinalIgnoreCase) >= 0)
-                    ).ToList();
+                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, sDate, eDate.AddDays(1), searchby.ToUpper(), line, typeof(enResponseSummary));
                 }
                 else if (searchby != "")
                 {
-                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, null, null, searchby.ToUpper(), typeof(enResponseSummary));
+                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, null, null, searchby.ToUpper(), line, typeof(enResponseSummary));
                 }
                 else if (startDate != "" && endDate != "")
                 {
                     DateTime sDate = DateTime.ParseExact(startDate, "dd/MM/yyyy", null);
                     DateTime eDate = DateTime.ParseExact(endDate, "dd/MM/yyyy", null);
-                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, sDate, eDate.AddDays(1), null, typeof(enResponseSummary));//();
+                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, sDate, eDate.AddDays(1), null, line, typeof(enResponseSummary));
                 }
                 else
                 {
-                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, null, null, null, typeof(enResponseSummary));// ReadAll(_startRowNumber, _endRowNumber);
+                    listOfResponse = objBLResponse.ReadAllAndAggregate(_startRowNumber, _endRowNumber, null, null, null, line, typeof(enResponseSummary));
                 }
             }
             catch (Exception ex)
@@ -210,6 +233,7 @@ namespace CodeScanner.Controllers
             List<enResponseTblResp> responseList = new List<enResponseTblResp>();
             // build a lookup for office members to avoid repeated list scans
             var officeLookup = listOfOfficeMember.ToDictionary(x => x.ID, x => x.Name);
+            var lineLookup = LineConfigHelper.GetLines().ToDictionary(x => x.Id, x => x.Name);
             foreach (var item in listOfResponse)
             {
                 var enResponsetblResp = new enResponseTblResp();
@@ -221,6 +245,10 @@ namespace CodeScanner.Controllers
                 string name;
                 enResponsetblResp.VisualBy = officeLookup.TryGetValue(item.VisualBy, out name) ? name : string.Empty;
                 enResponsetblResp.ProdLine = Utility.Helper.ProductionLine(item.ProductionLine);
+                string lineName;
+                enResponsetblResp.Line = item.Line.HasValue && lineLookup.TryGetValue(item.Line.Value, out lineName)
+                    ? lineName
+                    : (item.Line.HasValue ? "Line " + item.Line.Value : string.Empty);
                 enResponsetblResp.TestedBy = officeLookup.TryGetValue(item.TestedBy, out name) ? name : string.Empty;
                 enResponsetblResp.ProcEng = officeLookup.TryGetValue(item.ProcessEngg, out name) ? name : string.Empty;
                 enResponsetblResp.QcStatus = Utility.Helper.TestingStage(item.QcStatus);
