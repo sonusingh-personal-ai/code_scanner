@@ -8,11 +8,13 @@ GO
 CREATE OR ALTER PROCEDURE [dbo].[usp_Line_UPDATE]
 	@Id INT,
 	@Name NVARCHAR(100),
+	@Sequence INT = NULL,
 	@ModifiedOn DATETIME = NULL
 AS
 BEGIN
 	UPDATE [dbo].[Line]
 	SET [Name] = @Name,
+		[Sequence] = ISNULL(@Sequence, [Sequence]),
 		[ModifiedOn] = ISNULL(@ModifiedOn, GETDATE())
 	WHERE [Id] = @Id
 END

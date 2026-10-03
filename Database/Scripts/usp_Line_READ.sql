@@ -14,6 +14,6 @@ BEGIN
 	IF (@Id IS NOT NULL AND @Id > 0)
 		SELECT * FROM [dbo].[Line] WHERE [Id] = @Id;
 	ELSE
-		SELECT * FROM [dbo].[Line] ORDER BY [Id] ASC;
+		SELECT * FROM [dbo].[Line] ORDER BY [Sequence] ASC, [Id] ASC;
 END
 GO

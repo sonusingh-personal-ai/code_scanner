@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Web.Hosting;
 using BusinessLogicLayer;
 using Entity;
-using Newtonsoft.Json;
 
 namespace CodeScanner
 {
@@ -13,6 +10,7 @@ namespace CodeScanner
     {
         public int Id { get; set; }
         public string Name { get; set; }
+        public int Sequence { get; set; }
     }
 
     public static class LineConfigHelper
@@ -21,46 +19,11 @@ namespace CodeScanner
 
         private static readonly List<LineItem> DefaultLines = new List<LineItem>
         {
-            new LineItem { Id = 1, Name = "Line 1" },
-            new LineItem { Id = 2, Name = "Line 2" },
-            new LineItem { Id = 3, Name = "Line 3" },
-            new LineItem { Id = 4, Name = "Line 4" }
+            new LineItem { Id = 1, Name = "Line 1", Sequence = 1 },
+            new LineItem { Id = 2, Name = "Line 2", Sequence = 2 },
+            new LineItem { Id = 3, Name = "Line 3", Sequence = 3 },
+            new LineItem { Id = 4, Name = "Line 4", Sequence = 4 }
         };
-
-        private static string GetFilePath()
-        {
-            string path = null;
-            try
-            {
-                if (HostingEnvironment.IsHosted)
-                {
-                    path = HostingEnvironment.MapPath("~/App_Data/lines.json");
-                }
-            }
-            catch { }
-
-            if (string.IsNullOrEmpty(path))
-            {
-                string[] candidates = new[]
-                {
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "App_Data", "lines.json"),
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CodeScanner", "App_Data", "lines.json"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "App_Data", "lines.json"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "CodeScanner", "App_Data", "lines.json")
-                };
-
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c))
-                    {
-                        path = c;
-                        break;
-                    }
-                }
-            }
-
-            return string.IsNullOrEmpty(path) ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "App_Data", "lines.json") : path;
-        }
 
         public static List<LineItem> GetLines()
         {
@@ -73,14 +36,12 @@ namespace CodeScanner
 
                     if (dbLines != null && dbLines.Count > 0)
                     {
-                        var result = dbLines
+                        return dbLines
                             .Where(l => l.Id.HasValue && !string.IsNullOrWhiteSpace(l.Name))
-                            .OrderBy(l => l.Id.Value)
-                            .Select(l => new LineItem { Id = l.Id.Value, Name = l.Name })
+                            .OrderBy(l => l.Sequence)
+                            .ThenBy(l => l.Id.Value)
+                            .Select(l => new LineItem { Id = l.Id.Value, Name = l.Name, Sequence = l.Sequence })
                             .ToList();
-
-                        SyncBackupJson(result);
-                        return result;
                     }
 
                     // If table is empty, seed defaults
@@ -88,14 +49,12 @@ namespace CodeScanner
                     dbLines = bl.ReadAll();
                     if (dbLines != null && dbLines.Count > 0)
                     {
-                        var result = dbLines
+                        return dbLines
                             .Where(l => l.Id.HasValue && !string.IsNullOrWhiteSpace(l.Name))
-                            .OrderBy(l => l.Id.Value)
-                            .Select(l => new LineItem { Id = l.Id.Value, Name = l.Name })
+                            .OrderBy(l => l.Sequence)
+                            .ThenBy(l => l.Id.Value)
+                            .Select(l => new LineItem { Id = l.Id.Value, Name = l.Name, Sequence = l.Sequence })
                             .ToList();
-
-                        SyncBackupJson(result);
-                        return result;
                     }
                 }
                 catch (Exception ex)
@@ -103,21 +62,11 @@ namespace CodeScanner
                     Log.Error("Error reading lines from database: " + ex.ToString());
                 }
 
-                // Fallback to local JSON file or defaults if DB is unavailable
-                return GetLinesFromJsonFallback();
+                return new List<LineItem>(DefaultLines);
             }
         }
 
-        public static bool SaveLines(List<LineItem> lines)
-        {
-            lock (_syncLock)
-            {
-                SyncBackupJson(lines);
-                return true;
-            }
-        }
-
-        public static bool AddLine(string name)
+        public static bool AddLine(string name, int? sequence = null)
         {
             if (string.IsNullOrWhiteSpace(name))
                 return false;
@@ -126,25 +75,27 @@ namespace CodeScanner
             {
                 try
                 {
-                    var en = new enLine { Name = name.Trim(), CreatedOn = DateTime.Now };
+                    int seq = sequence ?? 0;
+                    if (seq <= 0)
+                    {
+                        var existing = GetLines();
+                        seq = existing.Any() ? existing.Max(l => l.Sequence) + 1 : 1;
+                    }
+
+                    var en = new enLine { Name = name.Trim(), Sequence = seq, CreatedOn = DateTime.Now };
                     var bl = new blLine(en);
                     int newId = bl.Create();
-                    if (newId > 0)
-                    {
-                        GetLines(); // refresh & sync backup
-                        return true;
-                    }
+                    return newId > 0;
                 }
                 catch (Exception ex)
                 {
                     Log.Error("Error adding line to database: " + ex.ToString());
+                    return false;
                 }
-
-                return false;
             }
         }
 
-        public static bool UpdateLine(int id, string newName)
+        public static bool UpdateLine(int id, string newName, int? sequence = null)
         {
             if (id <= 0 || string.IsNullOrWhiteSpace(newName))
                 return false;
@@ -153,21 +104,90 @@ namespace CodeScanner
             {
                 try
                 {
-                    var en = new enLine { Id = id, Name = newName.Trim(), ModifiedOn = DateTime.Now };
+                    var en = new enLine { Id = id };
                     var bl = new blLine(en);
-                    int rows = bl.Update();
-                    if (rows > 0)
+                    bl.Read();
+
+                    en.Name = newName.Trim();
+                    if (sequence.HasValue && sequence.Value > 0)
                     {
-                        GetLines(); // refresh & sync backup
-                        return true;
+                        en.Sequence = sequence.Value;
                     }
+                    en.ModifiedOn = DateTime.Now;
+
+                    int rows = bl.Update();
+                    return rows > 0;
                 }
                 catch (Exception ex)
                 {
                     Log.Error("Error updating line in database: " + ex.ToString());
+                    return false;
                 }
+            }
+        }
 
+        public static bool UpdateLineSequence(int id, int sequence)
+        {
+            if (id <= 0 || sequence <= 0)
                 return false;
+
+            lock (_syncLock)
+            {
+                try
+                {
+                    var bl = new blLine();
+                    int rows = bl.UpdateSequence(id, sequence);
+                    return rows > 0;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error updating line sequence: " + ex.ToString());
+                    return false;
+                }
+            }
+        }
+
+        public static bool MoveLine(int id, string direction)
+        {
+            lock (_syncLock)
+            {
+                try
+                {
+                    var lines = GetLines();
+                    int index = lines.FindIndex(l => l.Id == id);
+                    if (index < 0) return false;
+
+                    int swapIndex = string.Equals(direction, "up", StringComparison.OrdinalIgnoreCase) ? index - 1 : index + 1;
+                    if (swapIndex < 0 || swapIndex >= lines.Count) return false;
+
+                    var current = lines[index];
+                    var other = lines[swapIndex];
+
+                    // If sequences are the same, normalize all to 1..N first
+                    if (current.Sequence == other.Sequence)
+                    {
+                        for (int i = 0; i < lines.Count; i++)
+                        {
+                            lines[i].Sequence = (i + 1);
+                        }
+                    }
+
+                    int tempSeq = current.Sequence;
+                    current.Sequence = other.Sequence;
+                    other.Sequence = tempSeq;
+
+                    var blCur = new blLine(new enLine { Id = current.Id, Name = current.Name, Sequence = current.Sequence, ModifiedOn = DateTime.Now });
+                    blCur.Update();
+                    var blOth = new blLine(new enLine { Id = other.Id, Name = other.Name, Sequence = other.Sequence, ModifiedOn = DateTime.Now });
+                    blOth.Update();
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error moving line: " + ex.ToString());
+                    return false;
+                }
             }
         }
 
@@ -196,7 +216,6 @@ namespace CodeScanner
                         Log.Error("Error resetting line in Response for line id " + id + ": " + ex.ToString());
                     }
 
-                    GetLines(); // refresh & sync backup
                     return rows > 0;
                 }
                 catch (Exception ex)
@@ -225,7 +244,6 @@ namespace CodeScanner
                         Log.Error("Error resetting all lines in Response: " + ex.ToString());
                     }
 
-                    GetLines(); // refresh & sync backup
                     return true;
                 }
                 catch (Exception ex)
@@ -250,59 +268,19 @@ namespace CodeScanner
         {
             try
             {
-                var existing = GetLinesFromJsonFallback();
-                var toSeed = (existing != null && existing.Count > 0) ? existing : DefaultLines;
-
-                foreach (var line in toSeed)
+                int seq = 1;
+                foreach (var line in DefaultLines)
                 {
-                    var en = new enLine { Name = line.Name, CreatedOn = DateTime.Now };
+                    var en = new enLine { Name = line.Name, Sequence = seq, CreatedOn = DateTime.Now };
                     var bl = new blLine(en);
                     bl.Create();
+                    seq++;
                 }
             }
             catch (Exception ex)
             {
                 Log.Error("Error seeding default lines: " + ex.ToString());
             }
-        }
-
-        private static List<LineItem> GetLinesFromJsonFallback()
-        {
-            try
-            {
-                string filePath = GetFilePath();
-                if (File.Exists(filePath))
-                {
-                    string json = File.ReadAllText(filePath);
-                    var lines = JsonConvert.DeserializeObject<List<LineItem>>(json);
-                    if (lines != null && lines.Count > 0)
-                        return lines;
-                }
-            }
-            catch { }
-
-            return new List<LineItem>(DefaultLines);
-        }
-
-        private static void SyncBackupJson(List<LineItem> lines)
-        {
-            try
-            {
-                string filePath = GetFilePath();
-                string dir = Path.GetDirectoryName(filePath);
-                if (!Directory.Exists(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-
-                var cleanList = (lines ?? new List<LineItem>())
-                    .Where(l => l != null && !string.IsNullOrWhiteSpace(l.Name))
-                    .ToList();
-
-                string json = JsonConvert.SerializeObject(cleanList, Formatting.Indented);
-                File.WriteAllText(filePath, json);
-            }
-            catch { }
         }
     }
 }

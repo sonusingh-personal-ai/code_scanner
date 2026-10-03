@@ -12,10 +12,20 @@ BEGIN
     CREATE TABLE [dbo].[Line] (
         [Id] INT IDENTITY(1,1) NOT NULL,
         [Name] NVARCHAR(100) NOT NULL,
+        [Sequence] INT NOT NULL CONSTRAINT [DF_Line_Sequence] DEFAULT (0),
         [CreatedOn] DATETIME NOT NULL CONSTRAINT [DF_Line_CreatedOn] DEFAULT (GETDATE()),
         [ModifiedOn] DATETIME NULL,
         CONSTRAINT [PK_Line] PRIMARY KEY CLUSTERED ([Id] ASC)
     );
+END
+ELSE IF NOT EXISTS (
+    SELECT * FROM sys.columns 
+    WHERE object_id = OBJECT_ID(N'[dbo].[Line]') 
+    AND name = 'Sequence'
+)
+BEGIN
+    ALTER TABLE [dbo].[Line]
+    ADD [Sequence] INT NOT NULL CONSTRAINT [DF_Line_Sequence] DEFAULT (0);
 END
 GO
 
@@ -23,25 +33,37 @@ GO
 IF NOT EXISTS (SELECT 1 FROM [dbo].[Line])
 BEGIN
     SET IDENTITY_INSERT [dbo].[Line] ON;
-    INSERT INTO [dbo].[Line] ([Id], [Name], [CreatedOn]) VALUES
-        (1, 'Line 1', GETDATE()),
-        (2, 'Line 2', GETDATE()),
-        (3, 'Line 3', GETDATE()),
-        (4, 'Line 4', GETDATE());
+    INSERT INTO [dbo].[Line] ([Id], [Name], [Sequence], [CreatedOn]) VALUES
+        (1, 'Line 1', 1, GETDATE()),
+        (2, 'Line 2', 2, GETDATE()),
+        (3, 'Line 3', 3, GETDATE()),
+        (4, 'Line 4', 4, GETDATE());
     SET IDENTITY_INSERT [dbo].[Line] OFF;
+END
+ELSE
+BEGIN
+    UPDATE [dbo].[Line]
+    SET [Sequence] = [Id]
+    WHERE [Sequence] = 0 OR [Sequence] IS NULL;
 END
 GO
 
 -- 3. Stored Procedure: usp_Line_CREATE
 CREATE OR ALTER PROCEDURE [dbo].[usp_Line_CREATE]
     @Name NVARCHAR(100),
+    @Sequence INT = NULL,
     @CreatedOn DATETIME = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO [dbo].[Line] ([Name], [CreatedOn])
-    VALUES (@Name, ISNULL(@CreatedOn, GETDATE()));
+    IF (@Sequence IS NULL OR @Sequence <= 0)
+    BEGIN
+        SELECT @Sequence = ISNULL(MAX([Sequence]), 0) + 1 FROM [dbo].[Line];
+    END
+
+    INSERT INTO [dbo].[Line] ([Name], [Sequence], [CreatedOn])
+    VALUES (@Name, @Sequence, ISNULL(@CreatedOn, GETDATE()));
 
     SELECT SCOPE_IDENTITY() AS Id;
 END
@@ -57,7 +79,7 @@ BEGIN
     IF (@Id IS NOT NULL AND @Id > 0)
         SELECT * FROM [dbo].[Line] WHERE [Id] = @Id;
     ELSE
-        SELECT * FROM [dbo].[Line] ORDER BY [Id] ASC;
+        SELECT * FROM [dbo].[Line] ORDER BY [Sequence] ASC, [Id] ASC;
 END
 GO
 
@@ -65,11 +87,13 @@ GO
 CREATE OR ALTER PROCEDURE [dbo].[usp_Line_UPDATE]
     @Id INT,
     @Name NVARCHAR(100),
+    @Sequence INT = NULL,
     @ModifiedOn DATETIME = NULL
 AS
 BEGIN
     UPDATE [dbo].[Line]
     SET [Name] = @Name,
+        [Sequence] = ISNULL(@Sequence, [Sequence]),
         [ModifiedOn] = ISNULL(@ModifiedOn, GETDATE())
     WHERE [Id] = @Id;
 END

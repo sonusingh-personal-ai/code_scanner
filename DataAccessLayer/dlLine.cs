@@ -22,7 +22,7 @@ namespace DataAccessLayer
 
         public int Create()
         {
-            return base.Create(_enLine.Name, DateTime.Now);
+            return base.Create(_enLine.Name, _enLine.Sequence, DateTime.Now);
         }
 
         public void Read()
@@ -53,7 +53,7 @@ namespace DataAccessLayer
 
         public int Update()
         {
-            return base.Update(_enLine.Id, _enLine.Name, DateTime.Now);
+            return base.Update(_enLine.Id, _enLine.Name, _enLine.Sequence, DateTime.Now);
         }
 
         public int Delete()
@@ -65,6 +65,7 @@ namespace DataAccessLayer
         {
             enLine_.Id = Convert.ToInt32(dr_["Id"]);
             enLine_.Name = dr_["Name"].ToString();
+            enLine_.Sequence = dr_["Sequence"] == DBNull.Value ? 0 : Convert.ToInt32(dr_["Sequence"]);
             enLine_.CreatedOn = Convert.ToDateTime(dr_["CreatedOn"]);
             enLine_.ModifiedOn = DBNull.Value == dr_["ModifiedOn"] ? (DateTime?)null : Convert.ToDateTime(dr_["ModifiedOn"]);
         }

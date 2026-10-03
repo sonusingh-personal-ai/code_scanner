@@ -1,4 +1,5 @@
 using Entity;
+using System;
 using System.Collections.Generic;
 using DAL = DataAccessLayer.dlLine;
 
@@ -41,6 +42,18 @@ namespace BusinessLogicLayer
         public int Delete()
         {
             return GetDALReference().Delete();
+        }
+
+        public int UpdateSequence(int id, int sequence)
+        {
+            var en = new enLine { Id = id };
+            var dal = new DAL(en);
+            dal.Read();
+            if (string.IsNullOrEmpty(en.Name)) return 0;
+
+            en.Sequence = sequence;
+            en.ModifiedOn = DateTime.Now;
+            return dal.Update();
         }
 
         private DAL GetDALReference()
