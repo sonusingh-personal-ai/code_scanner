@@ -93,11 +93,23 @@ namespace CodeScanner.Controllers
         }
 
         [HttpPost]
+        public JsonResult SaveLine(string name)
+        {
+            return AddLine(name);
+        }
+
+        [HttpPost]
         public JsonResult UpdateLine(int id, string name)
         {
             bool success = LineConfigHelper.UpdateLine(id, name);
             var lines = LineConfigHelper.GetLines();
             return Json(new { success = success, lines = lines });
+        }
+
+        [HttpPost]
+        public JsonResult EditLine(int id, string name)
+        {
+            return UpdateLine(id, name);
         }
 
         [HttpPost]
