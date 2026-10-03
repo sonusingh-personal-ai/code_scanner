@@ -85,17 +85,37 @@ namespace CodeScanner.Controllers
         }
 
         [HttpPost]
-        public JsonResult AddLine(string name)
+        public JsonResult AddLine(string name, int? sequence)
         {
-            bool success = LineConfigHelper.AddLine(name);
+            bool success = LineConfigHelper.AddLine(name, sequence);
             var lines = LineConfigHelper.GetLines();
             return Json(new { success = success, lines = lines });
         }
 
         [HttpPost]
-        public JsonResult UpdateLine(int id, string name)
+        public JsonResult SaveLine(string name, int? sequence)
         {
-            bool success = LineConfigHelper.UpdateLine(id, name);
+            return AddLine(name, sequence);
+        }
+
+        [HttpPost]
+        public JsonResult UpdateLine(int id, string name, int? sequence)
+        {
+            bool success = LineConfigHelper.UpdateLine(id, name, sequence);
+            var lines = LineConfigHelper.GetLines();
+            return Json(new { success = success, lines = lines });
+        }
+
+        [HttpPost]
+        public JsonResult EditLine(int id, string name, int? sequence)
+        {
+            return UpdateLine(id, name, sequence);
+        }
+
+        [HttpPost]
+        public JsonResult MoveLine(int id, string direction)
+        {
+            bool success = LineConfigHelper.MoveLine(id, direction);
             var lines = LineConfigHelper.GetLines();
             return Json(new { success = success, lines = lines });
         }
