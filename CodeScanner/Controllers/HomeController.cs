@@ -108,6 +108,14 @@ namespace CodeScanner.Controllers
             return Json(new { success = success, lines = lines });
         }
 
+        [HttpPost]
+        public JsonResult DeleteAllLines()
+        {
+            bool success = LineConfigHelper.DeleteAllLines();
+            var lines = LineConfigHelper.GetLines();
+            return Json(new { success = success, lines = lines });
+        }
+
         public ActionResult Setting()
         {
             List<enModel> listOfModels = new List<enModel>();

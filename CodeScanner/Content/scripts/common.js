@@ -1,3 +1,9 @@
+if (typeof toastersetting !== 'function') {
+    window.toastersetting = function (message, title, type, colorCode) {
+        alert((title ? title + ": " : "") + message);
+    };
+}
+
 var isOk = true;
 var currentScanId = 0;
 
@@ -117,13 +123,24 @@ function validateMandatoryFields() {
     var allValid = true;
     var firstInvalid = null;
 
-    $(".validate").each(function () {
+    $(".validate, .isValidate").each(function () {
         var $field = $(this);
+        var id = $field.attr("id");
+
+        // Skip Line and Printer Model since they have dedicated validators
+        if (id === "ddlLine" || id === "lineSelect" || id === "printerModel") {
+            return;
+        }
+
         var value = $field.val();
-        var isEmpty = value === null || value === undefined || value === "";
+        var isEmpty = value === null || value === undefined || value === "" || value === "0";
 
         if (isEmpty) {
             $field.addClass("isValidate").removeClass("validate");
+            allValid = false;
+            if (!firstInvalid) {
+                firstInvalid = $field;
+            }
         } else {
             $field.removeClass("isValidate").addClass("validate");
         }
@@ -147,12 +164,37 @@ function validateProductionLine() {
 function SendToComPort(isRecurrence) {
     getInfoValue();
 
-    // 1. Mandatory validation check
-    if (!validateMandatoryFields() || !validatePrinterModel() || !validateLine() || $(".isValidate").length > 0) {
+    // 1. Mandatory validation check with specific field names
+    var missingFields = [];
+
+    var lineValid = validateLine();
+    var printerValid = validatePrinterModel();
+    var mandatoryValid = validateMandatoryFields();
+
+    if (!lineValid) {
+        missingFields.push("Line");
+    }
+    if (!printerValid) {
+        missingFields.push("Printer Model");
+    }
+
+    $(".isValidate").each(function () {
+        var id = $(this).attr("id");
+        if (id !== "ddlLine" && id !== "lineSelect" && id !== "printerModel") {
+            var label = $(this).closest(".form-group").find("label").first().text().trim();
+            if (!label && id) label = id;
+            if (label && missingFields.indexOf(label) === -1) {
+                missingFields.push(label);
+            }
+        }
+    });
+
+    if (missingFields.length > 0) {
+        var msg = "Please fill or select the following required field(s) before scanning:\n• " + missingFields.join("\n• ");
         if (typeof toastersetting === 'function') {
-            toastersetting("Please select a Line, Printer Model and fill all mandatory fields before scanning.", "Validation Error", "error", "#FF0000");
+            toastersetting(msg, "Validation Error", "error", "#FF0000");
         } else {
-            alert("Please select a Line, Printer Model and fill all mandatory fields before scanning.");
+            alert(msg);
         }
         return;
     }
@@ -189,23 +231,23 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
         url: "/comport/SendParameter",
         data: infoValue,
         success: function (resp) {
-            console.log(resp)
-            isOk = resp.isOk;
+            console.log(resp);
+            isOk = resp ? resp.isOk : true;
             $("#checkbtn").show();
             $("#loadingbtn").hide();
-            if (!isOk) {
-                setTimeout(function () { SendToComPort(true) }, 50);
-            }
 
             if (resp && resp.message) {
                 if (typeof toastersetting === 'function') {
                     toastersetting(resp.message, "Error", "error", "#FF0000");
                 } else {
-                    //alert(resp.message);
-                    console.log("error : ", resp.message)
-                    return;
+                    alert(resp.message);
                 }
+                console.log("error : ", resp.message);
                 return;
+            }
+
+            if (!isOk) {
+                setTimeout(function () { SendToComPort(true) }, 50);
             }
 
             $("#control_pv").val(resp.controlPv)
@@ -342,8 +384,9 @@ function getValueFromLocalStorage() {
     }
 
     // Auto-fill Line from LocalStorage
-    if (localStorage.getItem("selectedLine")) {
-        $("#lineSelect").val(localStorage.getItem("selectedLine")).trigger("change");
+    var savedLine = localStorage.getItem("selectedLine");
+    if (savedLine) {
+        $("#ddlLine, #lineSelect").val(savedLine).trigger("change");
     }
 }
 
@@ -361,7 +404,7 @@ function getInfoValue() {
     infoValue.disProgNo = $("#display_pv").val();
     infoValue.baudRate = parseInt($("#baudRate").val());//Baud Rate
     infoValue.printerModelId = $("#printerModel").val() ? $("#printerModel option:selected").val() : "";
-    infoValue.line = $("#lineSelect").val() ? $("#lineSelect option:selected").val() : "";
+    infoValue.line = ($("#ddlLine").val() || $("#lineSelect").val() || "");
 }
 
 function deleteResponse(id) {
@@ -438,9 +481,9 @@ function startTesting() {
 
 function validateFileds() {
     // Dynamic red border validation toggle on dropdown selection changes
-    $(".validate").on("change input", function () {
+    $(document).on("change input", ".validate, .isValidate", function () {
         var value = $(this).val();
-        var isEmpty = value === null || value === undefined || value === "";
+        var isEmpty = value === null || value === undefined || value === "" || value === "0";
 
         if (isEmpty) {
             $(this).addClass("isValidate").removeClass("validate");
@@ -451,21 +494,31 @@ function validateFileds() {
 }
 
 function validatePrinterModel() {
-    var printerModelVal = $("#printerModel").val();
+    var $printer = $("#printerModel");
+    var printerModelVal = $printer.val();
     if (!printerModelVal || printerModelVal === "" || printerModelVal === "0") {
-        $("#printerModel").addClass("isValidate").removeClass("validate");
+        $printer.addClass("isValidate").removeClass("validate");
         return false;
     }
-    $("#printerModel").removeClass("isValidate").addClass("validate");
+    $printer.removeClass("isValidate").addClass("validate");
     return true;
 }
 
 function validateLine() {
-    var lineVal = $("#lineSelect").val();
-    if (!lineVal || lineVal === "" || lineVal === "0") {
-        $("#lineSelect").addClass("isValidate").removeClass("validate");
+    var $lineElem = $("#ddlLine").length > 0 ? $("#ddlLine") : $("#lineSelect");
+    var lineVal = $lineElem.val();
+    var $select2Selection = $lineElem.next('.select2-container').find('.select2-selection');
+
+    if (!lineVal || lineVal === "" || lineVal === "0" || lineVal === "__ADD_NEW__") {
+        $lineElem.addClass("isValidate").removeClass("validate");
+        if ($select2Selection.length > 0) {
+            $select2Selection.addClass("isValidate");
+        }
         return false;
     }
-    $("#lineSelect").removeClass("isValidate").addClass("validate");
+    $lineElem.removeClass("isValidate").addClass("validate");
+    if ($select2Selection.length > 0) {
+        $select2Selection.removeClass("isValidate");
+    }
     return true;
 }

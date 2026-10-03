@@ -50,8 +50,9 @@ namespace CodeScanner
 
                     string json = File.ReadAllText(filePath);
                     var lines = JsonConvert.DeserializeObject<List<LineItem>>(json);
-                    if (lines == null || lines.Count == 0)
+                    if (lines == null)
                     {
+                        SaveLines(DefaultLines);
                         return new List<LineItem>(DefaultLines);
                     }
 
@@ -59,6 +60,7 @@ namespace CodeScanner
                 }
                 catch
                 {
+                    SaveLines(DefaultLines);
                     return new List<LineItem>(DefaultLines);
                 }
             }
@@ -80,11 +82,6 @@ namespace CodeScanner
                     var cleanList = (lines ?? new List<LineItem>())
                         .Where(l => l != null && !string.IsNullOrWhiteSpace(l.Name))
                         .ToList();
-
-                    if (cleanList.Count == 0)
-                    {
-                        cleanList = new List<LineItem>(DefaultLines);
-                    }
 
                     string json = JsonConvert.SerializeObject(cleanList, Formatting.Indented);
                     File.WriteAllText(filePath, json);
@@ -132,13 +129,62 @@ namespace CodeScanner
         {
             lock (_fileLock)
             {
+                if (id <= 0)
+                {
+                    return DeleteAllLines();
+                }
+
                 var lines = GetLines();
                 var item = lines.FirstOrDefault(l => l.Id == id);
                 if (item == null)
                     return false;
 
                 lines.Remove(item);
-                return SaveLines(lines);
+                bool saved = SaveLines(lines);
+
+                // Update Response table: set Line = NULL for responses with this line id
+                try
+                {
+                    BusinessLogicLayer.blResponse.ResetLine(id);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error resetting line in Response for line id " + id + ": " + ex.ToString());
+                }
+
+                // If no lines remain, also ensure all responses are reset
+                if (lines.Count == 0)
+                {
+                    try
+                    {
+                        BusinessLogicLayer.blResponse.ResetLine(null);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error("Error resetting all lines in Response: " + ex.ToString());
+                    }
+                }
+
+                return saved;
+            }
+        }
+
+        public static bool DeleteAllLines()
+        {
+            lock (_fileLock)
+            {
+                bool saved = SaveLines(new List<LineItem>());
+
+                try
+                {
+                    BusinessLogicLayer.blResponse.ResetLine(null);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error resetting all lines in Response: " + ex.ToString());
+                }
+
+                return saved;
             }
         }
 

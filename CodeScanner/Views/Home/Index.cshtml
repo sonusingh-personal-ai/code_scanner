@@ -46,15 +46,17 @@
         vertical-align: middle;
     }
 
-    .isValidate {
-        border-color: red;
+    .isValidate,
+    .select2-container .select2-selection--single.isValidate,
+    .select2-container.isValidate .select2-selection--single {
+        border-color: red !important;
     }
 /* 1. Fix Select2 container height and vertical alignment */
 .select2-container--default .select2-selection--single {
     height: 38px !important;
     display: flex !important;
     align-items: center !important;
-    border-color: #ced4da !important;
+    border-color: #ced4da;
 }
 
 /* 2. Left-align text for both rendered value & placeholder */
@@ -128,6 +130,14 @@
 
         $.each(printerModelList, function (indx, val) {
             $("#printerModel").append("<option value='" + val.Id + "'>" + val.Name + "</option>");
+        });
+
+        $("#printerModel").on("change", function () {
+            var val = $(this).val();
+            if (val && val !== "" && val !== "0") {
+                localStorage.setItem("printerModel", val);
+                $(this).removeClass("isValidate").addClass("validate");
+            }
         });
 
         if (port.length > 0) {
@@ -276,11 +286,12 @@
     }
 
     function loadLines(selectedId) {
+        var lineToSelect = selectedId || localStorage.getItem("selectedLine");
         $.ajax({
             url: '/Home/GetLines',
             type: 'GET',
             success: function (data) {
-                renderSelect2Options(data, selectedId);
+                renderSelect2Options(data, lineToSelect);
             },
             error: function () {
                 alert('Failed to load lines.');
@@ -338,6 +349,7 @@
                 data: { id: id },
                 success: function (res) {
                     if (res.success) {
+                        localStorage.removeItem("selectedLine");
                         loadLines();
                     } else {
                         alert("Failed to delete line.");
@@ -348,10 +360,14 @@
     }
 
     function bindLineEvents() {
-        $('#ddlLine').on('select2:select', function (e) {
-            var selectedVal = e.params.data.id;
+        $('#ddlLine').on('select2:select change', function (e) {
+            var selectedVal = $('#ddlLine').val();
             if (selectedVal === '__ADD_NEW__') {
                 addNewLine();
+            } else if (selectedVal && selectedVal !== "" && selectedVal !== "0") {
+                localStorage.setItem("selectedLine", selectedVal);
+                $('#ddlLine').removeClass('isValidate').addClass('validate');
+                $('#ddlLine').next('.select2-container').find('.select2-selection').removeClass('isValidate');
             }
         });
 

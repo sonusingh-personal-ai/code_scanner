@@ -2,6 +2,8 @@ using Entity;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SqlClient;
+using Utility;
 
 namespace DataAccessLayer
 {
@@ -54,6 +56,26 @@ namespace DataAccessLayer
         public int Delete(System.Data.SqlClient.SqlTransaction objSqlTransaction_)
         {
             return base.Delete(objSqlTransaction_, _enResponse.Id);
+        }
+
+        public static int ResetLine(int? lineId = null)
+        {
+            using (var conn = new SqlConnection(ApplicationSettings.DefaultConnectionString))
+            {
+                string sql = lineId.HasValue && lineId.Value > 0
+                    ? "UPDATE [dbo].[Response] SET [Line] = NULL WHERE [Line] = @LineId"
+                    : "UPDATE [dbo].[Response] SET [Line] = NULL";
+
+                using (var cmd = new SqlCommand(sql, conn))
+                {
+                    if (lineId.HasValue && lineId.Value > 0)
+                    {
+                        cmd.Parameters.Add("@LineId", SqlDbType.Int).Value = lineId.Value;
+                    }
+                    conn.Open();
+                    return cmd.ExecuteNonQuery();
+                }
+            }
         }
 
         private void ConstructObject(IDataReader dr_, enResponse enResponse_)

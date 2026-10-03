@@ -7,11 +7,14 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
+using System.Drawing.Text;
 using System.IO.Ports;
 using System.Linq;
 using System.Web.Mvc;
 using Utility;
-using System.Drawing.Text;
+using ZXing;
+using ZXing.Common;
+using ZXing.QrCode;
 
 namespace CodeScanner.Controllers
 {
@@ -359,28 +362,18 @@ namespace CodeScanner.Controllers
         }
 
         #region print 1
-        public void PrintQrCode(string qrCode, int? printerModelId, string barcodeValue = null,string qrCodeValues = "")
+        public void PrintQrCode(string barcode, int? printerModelId, string qrCodeText = null)
         {
             try
             {
-         
-             string staticTestQrString =
-             "MODEL : Testing Data\n" +
-             "TESTEDBY : kamal (fpsgn1639)\n" +
-             "CURRENTDATE : 6/09/2026\n" +
-             "DISP. PROG. NO. : GP_D_0.1\n" +
-             "CONTROL PROG. NO. : GP_C_DSP_HR_0.9\n" +
-             "BATTERY VOLT. : 25.5 || 25.6\n" +
-             "OUTPUT VOLT. : 230 || 230\n" +
-             "CHARGING CURRENT : 9.8 || 9.3\n" +
-             "SOLAR VOLT. : 66.6 || 66.8\n" +
-             "SOLAR CURRENT : 14.3 || 14.4";
+                string staticTestQrString =
+                    "MODEL:Testing Data; TESTEDBY:kamal (fpsgn1639); CURRENTDATE:6/09/2026; " +
+                    "DISP. PROG. NO.:GP_D_0.1; CONTROL PROG. NO.:GP_C_DSP_HR_0.9; " +
+                    "BATTERY VOLT. : 25.5 || 25.6; OUTPUT VOLT. : 230 || 230; " +
+                    "CHARGING CURRENT : 9.8 || 9.3; SOLAR VOLT. : 66.6 || 66.8; SOLAR CURRENT : 14.3 || 14.4";
 
-
-                var qrCodeVal = string.IsNullOrWhiteSpace(qrCodeValues) ? staticTestQrString : qrCodeValues;
-
-                // Ensure real serial/barcode number is passed cleanly instead of falling back to "no-barcode"
-                string cleanBarcode = !string.IsNullOrWhiteSpace(qrCode) ? qrCode : "G-PSX16NDZ3K0B02641";
+                var qrCodeVal = !string.IsNullOrWhiteSpace(qrCodeText) ? qrCodeText : staticTestQrString;
+                string cleanBarcode = !string.IsNullOrWhiteSpace(barcode) ? barcode : "GPSX16NHZ3K0B000004_1";
 
                 List<string> modelValues = new List<string>
                 {
@@ -399,6 +392,32 @@ namespace CodeScanner.Controllers
             {
                 Log.Error($"[PrintQrCode] Error: {ex}");
             }
+        }
+
+        public Bitmap GenerateLabelBitmap(List<string> values, float dpi = 203.0f)
+        {
+            float totalWidthUnits = 197.0f; // 50mm
+            float totalHeightUnits = 98.0f; // 25mm
+
+            int pixelWidth = (int)Math.Round((totalWidthUnits / 100.0f) * dpi);
+            int pixelHeight = (int)Math.Round((totalHeightUnits / 100.0f) * dpi);
+
+            Bitmap bitmap = new Bitmap(pixelWidth, pixelHeight);
+            bitmap.SetResolution(dpi, dpi);
+
+            using (Graphics g = Graphics.FromImage(bitmap))
+            {
+                g.Clear(Color.White);
+                g.ScaleTransform(dpi / 100.0f, dpi / 100.0f);
+                g.SmoothingMode = SmoothingMode.None;
+                g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = PixelOffsetMode.Default;
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+
+                RenderLabelPage(g, values);
+            }
+
+            return bitmap;
         }
 
         private PrintDocument CreateLabelPrintDocument(List<string> values)
@@ -421,11 +440,9 @@ namespace CodeScanner.Controllers
                 Graphics g = args.Graphics;
                 g.SmoothingMode = SmoothingMode.None;
                 g.InterpolationMode = InterpolationMode.NearestNeighbor;
-                g.PixelOffsetMode = PixelOffsetMode.None;
+                g.PixelOffsetMode = PixelOffsetMode.Default;
                 g.CompositingQuality = CompositingQuality.HighSpeed;
-
-                // Forces crisp 1-bit text without grey/fuzzy anti-aliased edges
-                g.TextRenderingHint = TextRenderingHint.SingleBitPerPixelGridFit;
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
                 RenderLabelPage(g, values);
                 args.HasMorePages = false;
@@ -439,17 +456,19 @@ namespace CodeScanner.Controllers
             string qrCodeContent = values[0];
             string printerModelId = values[1];
 
-            // Updated: Properly extracts barcodeValue from index 2
+            // Properly extract barcodeValue from index 2
             string barcodeValue = (values.Count > 2 && !string.IsNullOrWhiteSpace(values[2])) ? values[2] : "GPSX16NDZ3K0B026418";
 
             float totalWidth = 197f;  // 50mm
             float totalHeight = 98f;  // 25mm
 
-            float leftSectionWidth = totalWidth * 0.55f;
-            float rightSectionWidth = totalWidth * 0.45f;
+            // Balanced ratio: 122 units for left section, 75 units for right QR section
+            // Moves divider left and eliminates empty gap between barcode and divider line
+            float leftSectionWidth = 122f;
+            float rightSectionWidth = totalWidth - leftSectionWidth; // 75f
 
             // 1. Draw Sharp Divider Line
-            using (Pen linePen = new Pen(Color.Black, 1.5f))
+            using (Pen linePen = new Pen(Color.Black, 1.0f))
             {
                 g.DrawLine(linePen, leftSectionWidth, 0, leftSectionWidth, totalHeight);
             }
@@ -465,46 +484,28 @@ namespace CodeScanner.Controllers
         {
             if (string.IsNullOrEmpty(printerModelId)) return;
 
-            // Sanitize the serial number to strip off "_1" or any trailing underscore suffix
-            string cleanBarcodeValue = !string.IsNullOrWhiteSpace(barcodeValue)
-                ? barcodeValue.Split('_')[0].Trim()
-                : string.Empty;
+            string rawSerial = string.IsNullOrEmpty(barcodeValue) ? "GPSX16NHZ3K0B000004_1" : barcodeValue;
+            string cleanSerial = rawSerial.Contains("_") ? rawSerial.Split('_')[0] : rawSerial;
 
             int modelId = Convert.ToInt32(printerModelId);
             var enPrinterModel = getPrinterModel(modelId);
+            string modelName = enPrinterModel?.Name ?? string.Empty;
 
-            // Build details list starting with the Model Name
-            List<KeyValuePair<string, string>> detailsList = new List<KeyValuePair<string, string>>
-            {
-                new KeyValuePair<string, string>("MODEL", enPrinterModel?.Name ?? string.Empty)
-            };
+            // Barcode starts at 2.0 units, spanning 120.0 units (bars start at X=7.4, ending at X=116.6 before divider at 122.0)
+            float startX = 2.0f;
+            float textStartX = 6.0f;
+            float barcodeWidth = 120.0f;
 
-            // Safely append extra values only if they exist
-            if (enPrinterModel?.ModelValues != null && enPrinterModel.ModelValues.Count > 0)
-            {
-                int maxAllowedRows = 6;
-                int rowCount = Math.Min(enPrinterModel.ModelValues.Count, maxAllowedRows);
+            var prevSmoothing = g.SmoothingMode;
+            var prevPixelOffset = g.PixelOffsetMode;
+            var prevInterpolation = g.InterpolationMode;
+            var prevTextHint = g.TextRenderingHint;
 
-                for (int i = 0; i < rowCount; i++)
-                {
-                    var item = enPrinterModel.ModelValues[i];
-                    if (item != null)
-                    {
-                        detailsList.Add(new KeyValuePair<string, string>(item.Name ?? string.Empty, item.Value ?? string.Empty));
-                    }
-                }
-            }
+            g.SmoothingMode = SmoothingMode.None;
+            g.PixelOffsetMode = PixelOffsetMode.Default;
+            g.InterpolationMode = InterpolationMode.NearestNeighbor;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
-            // Layout Offsets
-            float startX = 8f;       // Left margin
-            float startY = 5f;       // Top margin
-            float colonX = 65f;      // Colon alignment column
-            float valueX = 69f;      // Values alignment column
-
-            float fontEmSize = 4.0f;
-            float lineHeight = 9.0f;
-
-            using (Font dynamicFont = new Font("Arial", fontEmSize, FontStyle.Bold))
             using (SolidBrush brush = new SolidBrush(Color.Black))
             using (StringFormat leftFormat = new StringFormat
             {
@@ -512,60 +513,93 @@ namespace CodeScanner.Controllers
                 FormatFlags = StringFormatFlags.NoWrap,
                 Trimming = StringTrimming.None
             })
+            using (StringFormat centerFormat = new StringFormat
             {
-                // 1. Draw Details List (MODEL and any optional ModelValues)
-                for (int i = 0; i < detailsList.Count; i++)
+                Alignment = StringAlignment.Center,
+                FormatFlags = StringFormatFlags.NoWrap,
+                Trimming = StringTrimming.None
+            })
+            using (Font headerFont = new Font("Arial", 6.5f, FontStyle.Bold, GraphicsUnit.World))
+            using (Font serialFont = new Font("Arial", 6.0f, FontStyle.Bold, GraphicsUnit.World))
+            {
+                // 1. MODEL : Name (aligned cleanly over barcode)
+                float modelY = 10.0f;
+                string modelDisplayText = string.IsNullOrEmpty(modelName) ? "MODEL :" : $"MODEL : {modelName}";
+                g.DrawString(modelDisplayText, headerFont, brush, new RectangleF(textStartX, modelY, barcodeWidth, 8.0f), leftFormat);
+
+                // 2. SERIAL NO. Header
+                float serialHeaderY = 21.0f;
+                g.DrawString("SERIAL NO.", headerFont, brush, new RectangleF(textStartX, serialHeaderY, barcodeWidth, 8.0f), leftFormat);
+
+                // 3. Barcode (120 units wide, 42 units high, centered vertically)
+                float barcodeY = 32.0f;
+                float barcodeHeight = 42.0f;
+
+                if (barcodeHeight > 5.0f && barcodeWidth > 10.0f)
                 {
-                    float currentY = startY + (i * lineHeight);
-
-                    string labelText = detailsList[i].Key.Trim();
-                    string valueText = detailsList[i].Value.Trim();
-
-                    // Draw Label
-                    RectangleF labelRect = new RectangleF(startX, currentY, colonX - startX - 1f, lineHeight);
-                    g.DrawString(labelText, dynamicFont, brush, labelRect, leftFormat);
-
-                    // Draw Colon
-                    RectangleF colonRect = new RectangleF(colonX, currentY, 3f, lineHeight);
-                    g.DrawString(":", dynamicFont, brush, colonRect, leftFormat);
-
-                    // Draw Value
-                    RectangleF valueRect = new RectangleF(valueX, currentY, width - valueX - 1f, lineHeight);
-                    g.DrawString(valueText, dynamicFont, brush, valueRect, leftFormat);
+                    RenderBarcodeZXing(g, cleanSerial, startX, barcodeY, barcodeWidth, barcodeHeight);
                 }
 
-                // 2. Draw "SERIAL NO." Header Line
-                float serialHeaderY = startY + (detailsList.Count * lineHeight) + 1f;
-                RectangleF serialHeaderRect = new RectangleF(startX, serialHeaderY, width - startX - 2f, lineHeight);
-                g.DrawString("SERIAL NO.", dynamicFont, brush, serialHeaderRect, leftFormat);
+                // 4. Centered Serial Number Text Below Barcode
+                float serialValueY = 77.0f;
+                RectangleF serialValueRect = new RectangleF(startX, serialValueY, barcodeWidth, 8.5f);
+                g.DrawString(cleanSerial, serialFont, brush, serialValueRect, centerFormat);
+            }
 
-                // 3. Draw Clean Serial Number Text Value (without "_1")
-                float serialValueY = serialHeaderY + lineHeight - 1f;
-                RectangleF serialValueRect = new RectangleF(startX, serialValueY, width - startX - 2f, 10f);
+            g.SmoothingMode = prevSmoothing;
+            g.PixelOffsetMode = prevPixelOffset;
+            g.InterpolationMode = prevInterpolation;
+            g.TextRenderingHint = prevTextHint;
+        }
 
-                using (Font serialValueFont = new Font("Arial", 5.0f, FontStyle.Bold))
+        /// <summary>
+        /// Renders Code 128 barcode natively via ZXing.Net at 1:1 printhead module resolution (244px).
+        /// </summary>
+        private void RenderBarcodeZXing(Graphics g, string barcodeValue, float x, float y, float width, float height)
+        {
+            if (string.IsNullOrEmpty(barcodeValue) || width <= 0f || height <= 0f) return;
+
+            try
+            {
+                // Use fixed 244-pixel width (222 modules + 11px quiet zone on each side).
+                // Prevents integer module downsampling artifacts that previously introduced a giant blank margin.
+                int targetPixelWidth = 244;
+                int targetPixelHeight = 85;
+
+                BarcodeWriter writer = new BarcodeWriter
                 {
-                    g.DrawString(cleanBarcodeValue, serialValueFont, brush, serialValueRect, leftFormat);
-                }
+                    Format = BarcodeFormat.CODE_128,
+                    Options = new EncodingOptions
+                    {
+                        Width = targetPixelWidth,
+                        Height = targetPixelHeight,
+                        Margin = 0,
+                        PureBarcode = true
+                    }
+                };
 
-                // 4. Draw 1D Barcode directly below the Serial Number Text
-                float barcodeY = serialValueY + 10f;
-                float barcodeHeight = height - barcodeY - 3f; // Uses remaining vertical height
-                float barcodeWidth = width - startX - 4f;
+                using (Bitmap barcodeImg = writer.Write(barcodeValue))
+                {
+                    g.DrawImage(barcodeImg, new RectangleF(x, y, width, height));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[RenderBarcodeZXing] Error generating barcode: {ex.Message}");
             }
         }
+
+
+
 
         private void DrawRightQrCodeDirectly(Graphics g, string textToEncode, float leftOffset, float qrAreaWidth, float totalHeight)
         {
             if (string.IsNullOrEmpty(textToEncode)) return;
 
-            using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
-            using (QRCodeData qrData = qrGenerator.CreateQrCode(textToEncode, QRCodeGenerator.ECCLevel.L))
-            using (QRCode qrCode = new QRCode(qrData))
-            // High pixels-per-module (30) ensures maximum source bitmap resolution before scaling
-            using (Bitmap qrBitmap = qrCode.GetGraphic(30, Color.Black, Color.White, drawQuietZones: true))
+            try
             {
-                float padding = 3f;
+                // Clean breathing room (quiet zone distance) from divider line and outer borders
+                float padding = 3.5f;
                 float availableWidth = qrAreaWidth - (padding * 2f);
                 float availableHeight = totalHeight - (padding * 2f);
                 float qrSquareSize = Math.Min(availableWidth, availableHeight);
@@ -573,7 +607,46 @@ namespace CodeScanner.Controllers
                 float startX = leftOffset + ((qrAreaWidth - qrSquareSize) / 2f);
                 float startY = (totalHeight - qrSquareSize) / 2f;
 
-                g.DrawImage(qrBitmap, startX, startY, qrSquareSize, qrSquareSize);
+                // Match exact printhead / target DPI resolution
+                float currentDpi = g.DpiX > 100f ? g.DpiX : 203f;
+                int targetPixels = (int)Math.Round((qrSquareSize / 100f) * currentDpi);
+
+                // Use ZXing BarcodeWriter to generate a 1-bit crisp binary QR matrix
+                BarcodeWriter qrWriter = new BarcodeWriter
+                {
+                    Format = BarcodeFormat.QR_CODE,
+                    Options = new QrCodeEncodingOptions
+                    {
+                        CharacterSet = "UTF-8",
+                        DisableECI = true,
+                        ErrorCorrection = ZXing.QrCode.Internal.ErrorCorrectionLevel.L,
+                        Margin = 2, // Standard quiet zone (2 modules) around QR code so scanners reliably detect finder patterns
+                        Width = targetPixels,
+                        Height = targetPixels
+                    }
+                };
+
+                using (Bitmap qrBitmap = qrWriter.Write(textToEncode))
+                {
+                    var prevInterpolation = g.InterpolationMode;
+                    var prevSmoothing = g.SmoothingMode;
+                    var prevPixelOffset = g.PixelOffsetMode;
+
+                    // NearestNeighbor ensures binary 1-bit sharp dots for thermal printheads (no gray anti-aliasing blur/dither)
+                    g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                    g.SmoothingMode = SmoothingMode.None;
+                    g.PixelOffsetMode = PixelOffsetMode.Half;
+
+                    g.DrawImage(qrBitmap, startX, startY, qrSquareSize, qrSquareSize);
+
+                    g.InterpolationMode = prevInterpolation;
+                    g.SmoothingMode = prevSmoothing;
+                    g.PixelOffsetMode = prevPixelOffset;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[DrawRightQrCodeDirectly] Error generating QR code: {ex.Message}");
             }
         }
 
@@ -588,20 +661,19 @@ namespace CodeScanner.Controllers
             catch (Exception ex)
             {
                 Log.Error("[getPrinterModel] Error while Read() PrinterModel. \n Exception : " + ex.ToString());
-                throw;
             }
 
-            var objENPrinterModelValue = new enPrinterModelValue() { ModelId = printerModelId };
-            var objBLPrinterModelValue = new blPrinterModelValue(objENPrinterModelValue);
-            try
-            {
-                objENPrinterModel.ModelValues = objBLPrinterModelValue.ReadAll();
-            }
-            catch (Exception ex)
-            {
-                Log.Error("[getPrinterModel] Error while Read() PrinterModelValue. \n Exception : " + ex.ToString());
-                throw;
-            }
+            //var objENPrinterModelValue = new enPrinterModelValue() { ModelId = printerModelId };
+            //var objBLPrinterModelValue = new blPrinterModelValue(objENPrinterModelValue);
+            //try
+            //{
+            //    objENPrinterModel.ModelValues = objBLPrinterModelValue.ReadAll();
+            //}
+            //catch (Exception ex)
+            //{
+            //    Log.Error("[getPrinterModel] Error while Read() PrinterModelValue. \n Exception : " + ex.ToString());
+            //    throw;
+            //}
 
             return objENPrinterModel;
         }

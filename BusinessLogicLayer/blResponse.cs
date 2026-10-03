@@ -32,6 +32,11 @@ namespace BusinessLogicLayer
             return GetDALReference().Delete(objSqlTransaction_);
         }
 
+        public static int ResetLine(int? lineId = null)
+        {
+            return DAL.ResetLine(lineId);
+        }
+
         public void Read()
         {
             GetDALReference().Read();

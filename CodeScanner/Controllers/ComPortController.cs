@@ -1,7 +1,8 @@
 using BusinessLogicLayer;
 using Entity;
 using Entity.Util;
-using IronBarCode;
+using System.Drawing.Imaging;
+using QRCoder;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -35,23 +36,60 @@ namespace CodeScanner.Controllers
         // other is still mid-ReadLine() on it, producing "The port is closed".
         static readonly object _portLock = new object();
 
+        private static void CloseSerialPort()
+        {
+            if (_serialPort != null)
+            {
+                try
+                {
+                    if (_serialPort.IsOpen)
+                    {
+                        _serialPort.Close();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error closing serial port: " + ex.Message);
+                }
+                try
+                {
+                    _serialPort.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Error disposing serial port: " + ex.Message);
+                }
+                _serialPort = null;
+            }
+        }
+
         [HttpPost]
         public JsonResult SendParameter(enResponse objResponse)
         {
             var barcodeString = "";
             enSettingResponse matchString = new enSettingResponse();
 
+            #region Check COM Port
+            if (string.IsNullOrWhiteSpace(objResponse.Port))
+            {
+                var resp = generateLogs((int)ResponseStatus.Fail, "COM Port is not selected. Please select a valid COM Port.", "Stage 1. COM Port is missing");
+                resp.isOk = true;
+                return Json(resp, JsonRequestBehavior.AllowGet);
+            }
+            #endregion
+
             #region Check QrCodePath 
             var QrCodePath = ApplicationSettings.getQrCodePath;
             if (!Directory.Exists(QrCodePath))
             {
                 var resp = generateLogs((int)ResponseStatus.Fail, "Directory not exist. \n Path : " + QrCodePath, "Stage 2. QrCodePath not exist");
+                resp.isOk = true;
                 return Json(resp, JsonRequestBehavior.AllowGet);
             }
             #endregion
 
             #region Check Barcode Length
-            if (objResponse.Barcode.Length >= 10 && objResponse.Barcode.Length <= 25)
+            if (objResponse.Barcode != null && objResponse.Barcode.Length >= 10 && objResponse.Barcode.Length <= 25)
             {
                 string IsThree = objResponse.Barcode.Substring(0, 1);
                 barcodeString = IsThree == "3" ? objResponse.Barcode.Substring(3, 3) : objResponse.Barcode.Substring(0, 3);
@@ -62,7 +100,8 @@ namespace CodeScanner.Controllers
             if (barcodeString == "")
             {
                 var resp = generateLogs((int)ResponseStatus.Fail, "Barcode string length is Zero", "Stage 3. Barcode string length is Zero");
-                return Json(matchString, JsonRequestBehavior.AllowGet);
+                resp.isOk = true;
+                return Json(resp, JsonRequestBehavior.AllowGet);
             }
             #endregion
 
@@ -71,6 +110,7 @@ namespace CodeScanner.Controllers
             if (model.Id == 0)
             {
                 var resp = generateLogs((int)ResponseStatus.Fail, "Model does not exist.", "Stage 4. Model does not exist.");
+                resp.isOk = true;
                 return Json(resp, JsonRequestBehavior.AllowGet);
             }
             #endregion
@@ -113,7 +153,8 @@ namespace CodeScanner.Controllers
             if (setting.Id == 0)
             {
                 var resp = generateLogs((int)ResponseStatus.Fail, "Setting file is missing", "Stage 5. Setting file is missing");
-                return Json(matchString, JsonRequestBehavior.AllowGet);
+                resp.isOk = true;
+                return Json(resp, JsonRequestBehavior.AllowGet);
             }
 
             string[] response = new string[] { };
@@ -125,24 +166,33 @@ namespace CodeScanner.Controllers
                 lock (_portLock)
                 {
                     Log.Info("@#Recurrence  : " + objResponse.IsRecurrence);
-                    if (objResponse.IsRecurrence == false)
+                    if (!objResponse.IsRecurrence)
                     {
-                        _serialPort = new SerialPort();
-                        _serialPort.PortName = objResponse.Port;
-                        _serialPort.BaudRate = objResponse.BaudRate;
-                        _serialPort.Parity = SetPortParity(_serialPort.Parity);
-                        _serialPort.DataBits = SetPortDataBits(_serialPort.DataBits);
-                        _serialPort.StopBits = SetPortStopBits(_serialPort.StopBits);
-                        _serialPort.Handshake = SetPortHandshake(_serialPort.Handshake);
-                        _serialPort.Close();
-                        _serialPort.Dispose();
+                        CloseSerialPort();
+
+                        _serialPort = new SerialPort
+                        {
+                            PortName = objResponse.Port,
+                            BaudRate = objResponse.BaudRate > 0 ? objResponse.BaudRate : 9600,
+                            Parity = SetPortParity(Parity.None),
+                            DataBits = SetPortDataBits(8),
+                            StopBits = SetPortStopBits(StopBits.One),
+                            Handshake = SetPortHandshake(Handshake.None),
+                            ReadTimeout = ReadPerLineTimeoutMs
+                        };
                         _serialPort.Open();
-                        // See ReadPerLineTimeoutMs above - bounds every ReadLine() call below so a
-                        // missed/late response from the device can't block this thread forever.
-                        // _serialPort is static and reused across recurring calls, so this only
-                        // needs to be set here, on the initial (non-recurrence) open.
-                        _serialPort.ReadTimeout = ReadPerLineTimeoutMs;
                         _serialPort.WriteLine("#" + objResponse.Barcode + "@");
+                    }
+                    else
+                    {
+                        if (_serialPort == null || !_serialPort.IsOpen)
+                        {
+                            CloseSerialPort();
+                            matchString.status = (int)ResponseStatus.Fail;
+                            matchString.message = "Serial port " + objResponse.Port + " is closed or disconnected. Please scan again.";
+                            matchString.isOk = true;
+                            return Json(matchString, JsonRequestBehavior.AllowGet);
+                        }
                     }
 
                     List<List<string>> stringObject = new List<List<string>>();
@@ -158,6 +208,15 @@ namespace CodeScanner.Controllers
                         // 0 every 60 seconds - so the 120s watchdog below never actually fired and
                         // a genuinely silent device hung this request indefinitely).
                         t = DateTime.Now.Subtract(now).TotalSeconds;
+
+                        if (_serialPort == null || !_serialPort.IsOpen)
+                        {
+                            CloseSerialPort();
+                            matchString.status = (int)ResponseStatus.Fail;
+                            matchString.message = "Serial port " + objResponse.Port + " was closed during read.";
+                            matchString.isOk = true;
+                            return Json(matchString, JsonRequestBehavior.AllowGet);
+                        }
 
                         string rec;
                         try
@@ -211,8 +270,7 @@ namespace CodeScanner.Controllers
 
                                     if (unResponsive == "SCAN CODE")
                                     {
-                                        _serialPort.Close();
-                                        _serialPort.Dispose();
+                                        CloseSerialPort();
                                         return Json(unResponsive, JsonRequestBehavior.AllowGet);
                                     }
 
@@ -244,10 +302,9 @@ namespace CodeScanner.Controllers
                                             var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, true, ConProgNo, DisProgNo, SysRating, objResponse.PrinterModelId, objResponse.Line);
                                             matchString = CreateMatchResult(setting, response, stringObject);
                                             var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
-                                            QRCodeWriter.CreateQrCode(QrCodeString, 250, QRCodeWriter.QrErrorCorrectionLevel.Medium).ChangeBarCodeColor(Color.OrangeRed).SaveAsPng(QrCodePath + "\\" + objENResponse.Barcode + "_" + objENResponse.QcStatus + ".png");
+                                            SaveQrCodePng(QrCodeString, Color.OrangeRed, Path.Combine(QrCodePath, objENResponse.Barcode + "_" + objENResponse.QcStatus + ".png"));
 
-                                            _serialPort.Close();
-                                            _serialPort.Dispose();
+                                            CloseSerialPort();
                                             return Json(matchString, JsonRequestBehavior.AllowGet);
                                         }
                                         else
@@ -261,10 +318,9 @@ namespace CodeScanner.Controllers
 
                                             matchString = CreateMatchResult(setting, response, stringObject);
                                             var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
-                                            QRCodeWriter.CreateQrCode(QrCodeString, 250, QRCodeWriter.QrErrorCorrectionLevel.Medium).ChangeBarCodeColor(Color.Black).SaveAsPng(QrCodePath + "\\" + objResponse.Barcode + "_" + objENResponse.QcStatus + ".png");
+                                            SaveQrCodePng(QrCodeString, Color.Black, Path.Combine(QrCodePath, objResponse.Barcode + "_" + objENResponse.QcStatus + ".png"));
 
-                                            _serialPort.Close();
-                                            _serialPort.Dispose();
+                                            CloseSerialPort();
                                             if (objResponse.ProductionLine == 2)
                                             {
                                                 PrintQrCode(objENResponse.Barcode + "_" + objENResponse.QcStatus, objResponse.PrinterModelId, QrCodeString);
@@ -295,8 +351,7 @@ namespace CodeScanner.Controllers
                     // back an empty/ambiguous object. isOk = true so the client's auto-retry
                     // (SendToComPort) stops instead of looping forever against a dead device.
                     Log.Error("ComPortController.SendParameter - Overall watchdog (" + OverallWatchdogSeconds.ToString("F0") + "s) elapsed without PASS/FAIL for Barcode=" + objResponse.Barcode);
-                    _serialPort.Close();
-                    _serialPort.Dispose();
+                    CloseSerialPort();
                     matchString.status = (int)ResponseStatus.Fail;
                     matchString.message = "No response received from the device within " + OverallWatchdogSeconds.ToString("F0") + " seconds. Check the connection and try again.";
                     matchString.isOk = true;
@@ -305,10 +360,9 @@ namespace CodeScanner.Controllers
             }
             catch (Exception ex)
             {
-                _serialPort.Close();
-                _serialPort.Dispose();
+                CloseSerialPort();
                 matchString.status = (int)ResponseStatus.Fail;
-                matchString.message = ex.ToString();
+                matchString.message = ex.Message;
                 matchString.isOk = true;
                 Log.Error("Exception : " + ex.ToString());
                 return Json(matchString, JsonRequestBehavior.AllowGet);
@@ -320,6 +374,42 @@ namespace CodeScanner.Controllers
         {
             PrintQrCode(code, printerModelId);
             return Json(new { status = 1, message = "Print" }, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpGet]
+        public ActionResult PreviewLabel(string code, int printerModelId, string qrText = null, float dpi = 300.0f)
+        {
+            try
+            {
+                string staticTestQrString =
+                    "MODEL:Testing Data; TESTEDBY:kamal (fpsgn1639); CURRENTDATE:6/09/2026; " +
+                    "DISP. PROG. NO.:GP_D_0.1; CONTROL PROG. NO.:GP_C_DSP_HR_0.9; " +
+                    "BATTERY VOLT. : 25.5 || 25.6; OUTPUT VOLT. : 230 || 230; " +
+                    "CHARGING CURRENT : 9.8 || 9.3; SOLAR VOLT. : 66.6 || 66.8; SOLAR CURRENT : 14.3 || 14.4";
+
+                string qrString = !string.IsNullOrWhiteSpace(qrText) ? qrText : staticTestQrString;
+                string cleanBarcode = !string.IsNullOrWhiteSpace(code) ? code : "GPSX16NHZ3K0B000004_1";
+
+                List<string> modelValues = new List<string>
+                {
+                    qrString,
+                    printerModelId.ToString(),
+                    cleanBarcode
+                };
+
+                float renderDpi = dpi > 50.0f ? dpi : 300.0f;
+                using (Bitmap bmp = GenerateLabelBitmap(modelValues, renderDpi))
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    bmp.Save(ms, ImageFormat.Png);
+                    return File(ms.ToArray(), "image/png");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[PreviewLabel] Error: {ex}");
+                return Content("Error generating label preview: " + ex.Message);
+            }
         }
 
         public string GenerateQrCodeString(enResponse objResponse, List<enResponseSummary> listofResponses, List<enOfficeMember> listOfOfficeMembers, string productionLine, enSettingResponse matchString)
@@ -410,6 +500,24 @@ namespace CodeScanner.Controllers
             matchString.model = setting.Model.Name;
             matchString.isOk = isOk;
             return matchString;
+        }
+
+        private static void SaveQrCodePng(string qrCodeText, Color qrColor, string filePath)
+        {
+            try
+            {
+                using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+                using (QRCodeData qrData = qrGenerator.CreateQrCode(qrCodeText, QRCodeGenerator.ECCLevel.M))
+                using (QRCode qrCode = new QRCode(qrData))
+                using (Bitmap qrBitmap = qrCode.GetGraphic(20, qrColor, Color.White, true))
+                {
+                    qrBitmap.Save(filePath, ImageFormat.Png);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[SaveQrCodePng] Failed to save QR image to {filePath}: {ex}");
+            }
         }
 
     }
