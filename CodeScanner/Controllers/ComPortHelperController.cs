@@ -674,20 +674,24 @@ namespace CodeScanner.Controllers
                 FormatFlags = StringFormatFlags.NoWrap,
                 Trimming = StringTrimming.None
             })
-            using (Font headerFont = new Font("Arial", 6.5f, FontStyle.Bold, GraphicsUnit.World))
-            using (Font serialFont = new Font("Arial", 6.0f, FontStyle.Bold, GraphicsUnit.World))
             {
-                // 1. MODEL : Name (aligned cleanly over barcode)
-                float modelY = 10.0f;
+                // 1. MODEL : Name (scaled up from 6.5f to 8.0f for high readability)
+                float modelY = 7.0f;
                 string modelDisplayText = string.IsNullOrEmpty(modelName) ? "MODEL :" : $"MODEL : {modelName}";
-                g.DrawString(modelDisplayText, headerFont, brush, new RectangleF(textStartX, modelY, barcodeWidth, 8.0f), leftFormat);
+                using (Font modelFont = GetBestFitFont(g, modelDisplayText, 8.0f, barcodeWidth, FontStyle.Bold))
+                {
+                    g.DrawString(modelDisplayText, modelFont, brush, new RectangleF(textStartX, modelY, barcodeWidth, 10.0f), leftFormat);
+                }
 
-                // 2. SERIAL NO. Header
-                float serialHeaderY = 21.0f;
-                g.DrawString("SERIAL NO.", headerFont, brush, new RectangleF(textStartX, serialHeaderY, barcodeWidth, 8.0f), leftFormat);
+                // 2. SERIAL NO. Header (scaled up from 6.5f to 8.0f)
+                float serialHeaderY = 18.5f;
+                using (Font headerFont = new Font("Arial", 8.0f, FontStyle.Bold, GraphicsUnit.World))
+                {
+                    g.DrawString("SERIAL NO.", headerFont, brush, new RectangleF(textStartX, serialHeaderY, barcodeWidth, 10.0f), leftFormat);
+                }
 
                 // 3. Barcode (120 units wide, 42 units high, centered vertically)
-                float barcodeY = 32.0f;
+                float barcodeY = 30.5f;
                 float barcodeHeight = 42.0f;
 
                 if (barcodeHeight > 5.0f && barcodeWidth > 10.0f)
@@ -695,16 +699,45 @@ namespace CodeScanner.Controllers
                     RenderBarcodeZXing(g, cleanSerial, startX, barcodeY, barcodeWidth, barcodeHeight);
                 }
 
-                // 4. Centered Serial Number Text Below Barcode
-                float serialValueY = 77.0f;
-                RectangleF serialValueRect = new RectangleF(startX, serialValueY, barcodeWidth, 8.5f);
-                g.DrawString(cleanSerial, serialFont, brush, serialValueRect, centerFormat);
+                // 4. Centered Serial Number Text Below Barcode (scaled up from 6.0f to 8.5f)
+                float serialValueY = 74.5f;
+                RectangleF serialValueRect = new RectangleF(startX, serialValueY, barcodeWidth, 12.0f);
+                using (Font serialValueFont = GetBestFitFont(g, cleanSerial, 8.5f, barcodeWidth, FontStyle.Bold))
+                {
+                    g.DrawString(cleanSerial, serialValueFont, brush, serialValueRect, centerFormat);
+                }
             }
 
             g.SmoothingMode = prevSmoothing;
             g.PixelOffsetMode = prevPixelOffset;
             g.InterpolationMode = prevInterpolation;
             g.TextRenderingHint = prevTextHint;
+        }
+
+        /// <summary>
+        /// Selects the largest font size up to targetSize that fits cleanly within maxWidth without clipping.
+        /// </summary>
+        private Font GetBestFitFont(Graphics g, string text, float targetSize, float maxWidth, FontStyle style)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return new Font("Arial", targetSize, style, GraphicsUnit.World);
+            }
+
+            float size = targetSize;
+            while (size > 5.5f)
+            {
+                Font candidate = new Font("Arial", size, style, GraphicsUnit.World);
+                SizeF measured = g.MeasureString(text, candidate);
+                if (measured.Width <= maxWidth)
+                {
+                    return candidate;
+                }
+                candidate.Dispose();
+                size -= 0.5f;
+            }
+
+            return new Font("Arial", 5.5f, style, GraphicsUnit.World);
         }
 
         /// <summary>
