@@ -35,6 +35,7 @@ namespace Entity
         public int BaudRate { get; set; }
         public bool IsRepeat { get; set; }
         public bool IsRecurrence { get; set; }
+        public string PrinterName { get; set; }
         #endregion
     }
 }

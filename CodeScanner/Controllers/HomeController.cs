@@ -27,6 +27,12 @@ namespace CodeScanner.Controllers
                 supportedLanguagesList.Add(port);
             }
 
+#if DEBUG
+            // Local testing option (only present in Debug / local development builds)
+            genericDropdwon.Add(new enGenericDropdown() { Key = "SIMULATOR", Value = "SIMULATOR (Virtual Jig)" });
+            supportedLanguagesList.Add(new SelectListItem { Value = "SIMULATOR", Text = "SIMULATOR (Virtual Jig)" });
+#endif
+
             var printerDropdown = new List<enGenericDropdown>();
             PrintDocument pd = new PrintDocument();
             foreach (var item in PrinterSettings.InstalledPrinters)

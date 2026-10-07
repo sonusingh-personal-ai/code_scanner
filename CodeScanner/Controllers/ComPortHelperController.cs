@@ -362,10 +362,17 @@ namespace CodeScanner.Controllers
         }
 
         #region print 1
-        public void PrintQrCode(string barcode, int? printerModelId, string qrCodeText = null)
+        public void PrintQrCode(string barcode, int? printerModelId, string qrCodeText = null, string targetPrinterName = null)
         {
             try
             {
+                // 1. Guard against machines with zero printers installed
+                if (PrinterSettings.InstalledPrinters.Count == 0)
+                {
+                    Log.Info("[PrintQrCode] No printers installed on this system. Skipping physical label print.");
+                    return;
+                }
+
                 string staticTestQrString =
                     "MODEL:Testing Data; TESTEDBY:kamal (fpsgn1639); CURRENTDATE:6/09/2026; " +
                     "DISP. PROG. NO.:GP_D_0.1; CONTROL PROG. NO.:GP_C_DSP_HR_0.9; " +
@@ -382,9 +389,37 @@ namespace CodeScanner.Controllers
                     cleanBarcode                // 2: Serial/Barcode number for SERIAL NO. row
                 };
 
-                using (PrintDocument pd = CreateLabelPrintDocument(modelValues))
+                using (PrintDocument pd = CreateLabelPrintDocument(modelValues, targetPrinterName))
                 {
-                    Log.Info("[PrintQrCode] Printing compact QR label...");
+                    if (pd == null)
+                    {
+                        Log.Info("[PrintQrCode] Print document could not be created or no valid printer available. Skipping print.");
+                        return;
+                    }
+
+                    if (!pd.PrinterSettings.IsValid)
+                    {
+                        Log.Warn($"[PrintQrCode] Printer '{pd.PrinterSettings.PrinterName}' is not valid or offline. Skipping print.");
+                        return;
+                    }
+
+                    // Never print to file-prompt virtual printers (e.g., Microsoft Print to PDF) as they hang web server processes waiting for modal file dialogs
+                    string selectedPrinter = pd.PrinterSettings.PrinterName ?? string.Empty;
+                    bool isPromptPrinter =
+                        pd.PrinterSettings.PrintToFile ||
+                        selectedPrinter.IndexOf("Print to PDF", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        selectedPrinter.IndexOf("XPS Document", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        selectedPrinter.IndexOf("OneNote", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        selectedPrinter.IndexOf("Fax", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        selectedPrinter.IndexOf("PORTPROMPT", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    if (isPromptPrinter)
+                    {
+                        Log.Info($"[PrintQrCode] Printer '{selectedPrinter}' is a virtual prompt-to-file printer. Skipping physical print to prevent process hang.");
+                        return;
+                    }
+
+                    Log.Info($"[PrintQrCode] Printing compact QR label to '{selectedPrinter}'...");
                     pd.Print();
                 }
             }
@@ -420,35 +455,155 @@ namespace CodeScanner.Controllers
             return bitmap;
         }
 
-        private PrintDocument CreateLabelPrintDocument(List<string> values)
+        public bool IsPhysicalPrinterAvailable(string targetPrinterName = null)
         {
-            PrintDocument pd = new PrintDocument();
-            PrinterSettings settings = new PrinterSettings();
-
-            pd.PrinterSettings.PrinterName = settings.PrinterName;
-            pd.DefaultPageSettings.Landscape = false;
-
-            PaperSize labelSize = new PaperSize("50x25mm", 197, 98);
-            pd.DefaultPageSettings.PaperSize = labelSize;
-            pd.PrinterSettings.DefaultPageSettings.PaperSize = labelSize;
-            pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
-            pd.OriginAtMargins = true;
-
-            pd.PrintPage += (sender, args) =>
+            try
             {
-                // Set global crisp rendering hints for thermal print heads
-                Graphics g = args.Graphics;
-                g.SmoothingMode = SmoothingMode.None;
-                g.InterpolationMode = InterpolationMode.NearestNeighbor;
-                g.PixelOffsetMode = PixelOffsetMode.Default;
-                g.CompositingQuality = CompositingQuality.HighSpeed;
-                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                if (PrinterSettings.InstalledPrinters.Count == 0)
+                {
+                    return false;
+                }
 
-                RenderLabelPage(g, values);
-                args.HasMorePages = false;
-            };
+                // If a specific printer was requested
+                if (!string.IsNullOrWhiteSpace(targetPrinterName))
+                {
+                    bool exists = false;
+                    foreach (string installed in PrinterSettings.InstalledPrinters)
+                    {
+                        if (string.Equals(installed, targetPrinterName.Trim(), StringComparison.OrdinalIgnoreCase))
+                        {
+                            exists = true;
+                            break;
+                        }
+                    }
 
-            return pd;
+                    if (!exists || IsVirtualPromptPrinter(targetPrinterName))
+                    {
+                        return false;
+                    }
+
+                    PrinterSettings ps = new PrinterSettings { PrinterName = targetPrinterName.Trim() };
+                    return ps.IsValid;
+                }
+
+                // If no specific printer passed, check default printer
+                PrinterSettings defaultSettings = new PrinterSettings();
+                string defaultName = defaultSettings.PrinterName;
+
+                if (!string.IsNullOrWhiteSpace(defaultName) && !IsVirtualPromptPrinter(defaultName) && defaultSettings.IsValid)
+                {
+                    return true;
+                }
+
+                // Check if ANY physical non-virtual installed printer exists
+                foreach (string installed in PrinterSettings.InstalledPrinters)
+                {
+                    if (!IsVirtualPromptPrinter(installed))
+                    {
+                        PrinterSettings ps = new PrinterSettings { PrinterName = installed };
+                        if (ps.IsValid) return true;
+                    }
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool IsVirtualPromptPrinter(string printerName)
+        {
+            if (string.IsNullOrWhiteSpace(printerName)) return true;
+            return printerName.IndexOf("Print to PDF", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   printerName.IndexOf("XPS Document", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   printerName.IndexOf("OneNote", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   printerName.IndexOf("Fax", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   printerName.IndexOf("PORTPROMPT", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private PrintDocument CreateLabelPrintDocument(List<string> values, string targetPrinterName = null)
+        {
+            try
+            {
+                if (PrinterSettings.InstalledPrinters.Count == 0)
+                {
+                    return null;
+                }
+
+                PrintDocument pd = new PrintDocument();
+                PrinterSettings settings = new PrinterSettings();
+
+                // If caller provided a specific target printer, verify it exists among installed printers
+                string chosenPrinter = null;
+                if (!string.IsNullOrWhiteSpace(targetPrinterName))
+                {
+                    foreach (string installed in PrinterSettings.InstalledPrinters)
+                    {
+                        if (string.Equals(installed, targetPrinterName.Trim(), StringComparison.OrdinalIgnoreCase))
+                        {
+                            chosenPrinter = installed;
+                            break;
+                        }
+                    }
+                }
+
+                // If no specific printer matched or was provided, fall back to default printer
+                if (string.IsNullOrWhiteSpace(chosenPrinter))
+                {
+                    chosenPrinter = settings.PrinterName;
+                }
+
+                if (string.IsNullOrWhiteSpace(chosenPrinter))
+                {
+                    return null;
+                }
+
+                pd.PrinterSettings.PrinterName = chosenPrinter;
+
+                if (!pd.PrinterSettings.IsValid)
+                {
+                    return null;
+                }
+
+                pd.DefaultPageSettings.Landscape = false;
+
+                PaperSize labelSize = new PaperSize("50x25mm", 197, 98);
+                try
+                {
+                    pd.DefaultPageSettings.PaperSize = labelSize;
+                    pd.PrinterSettings.DefaultPageSettings.PaperSize = labelSize;
+                }
+                catch
+                {
+                    // Ignore printer drivers that reject custom paper sizes
+                }
+
+                pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+                pd.OriginAtMargins = true;
+
+                pd.PrintPage += (sender, args) =>
+                {
+                    // Set global crisp rendering hints for thermal print heads
+                    Graphics g = args.Graphics;
+                    g.SmoothingMode = SmoothingMode.None;
+                    g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                    g.PixelOffsetMode = PixelOffsetMode.Default;
+                    g.CompositingQuality = CompositingQuality.HighSpeed;
+                    g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+
+                    RenderLabelPage(g, values);
+                    args.HasMorePages = false;
+                };
+
+                return pd;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[CreateLabelPrintDocument] Error initializing print document: {ex.Message}");
+                return null;
+            }
         }
 
         private void RenderLabelPage(Graphics g, List<string> values)
