@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,6 +19,7 @@ namespace Entity.Util
         public int status { get; set; }
         public string message { get; set; }
         public bool isOk { get; set; } = false;
+        public string printerStatus { get; set; }
         public List<List<string>> totalString { get; set; }
         public List<enSettingInfo> SettingInfoList { get; set; }
     }

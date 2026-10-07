@@ -127,8 +127,8 @@ function validateMandatoryFields() {
         var $field = $(this);
         var id = $field.attr("id");
 
-        // Skip Line and Printer Model since they have dedicated validators
-        if (id === "ddlLine" || id === "lineSelect" || id === "printerModel") {
+        // Skip Line, Printer Model, and Printer since they have dedicated line-aware validators
+        if (id === "ddlLine" || id === "lineSelect" || id === "printerModel" || id === "prnter") {
             return;
         }
 
@@ -168,19 +168,38 @@ function SendToComPort(isRecurrence) {
     var missingFields = [];
 
     var lineValid = validateLine();
-    var printerValid = validatePrinterModel();
-    var mandatoryValid = validateMandatoryFields();
-
     if (!lineValid) {
         missingFields.push("Line");
     }
-    if (!printerValid) {
-        missingFields.push("Printer Model");
+
+    var prodLine = $("#productionLine").val();
+    if (prodLine == '2') {
+        // Assembly line: Printer Model and Printer List validation
+        var printerModelValid = validatePrinterModel();
+        if (!printerModelValid) {
+            missingFields.push("Printer Model");
+        }
+
+        var selectedPrinter = $("#prnter").val();
+        if (!selectedPrinter || selectedPrinter === "" || selectedPrinter === "No printer connected" || selectedPrinter === "Select Printer") {
+            $("#prnter").addClass("isValidate");
+            $("#printerStatusBadge").text("No printer connected").show();
+            missingFields.push("Printer (No printer connected)");
+        } else {
+            $("#prnter").removeClass("isValidate");
+        }
+    } else {
+        // Card line: printer is not required
+        $("#printerModel").removeClass("isValidate").addClass("validate");
+        $("#prnter").removeClass("isValidate");
+        $("#printerStatusBadge").hide();
     }
+
+    var mandatoryValid = validateMandatoryFields();
 
     $(".isValidate").each(function () {
         var id = $(this).attr("id");
-        if (id !== "ddlLine" && id !== "lineSelect" && id !== "printerModel") {
+        if (id !== "ddlLine" && id !== "lineSelect" && id !== "printerModel" && id !== "prnter") {
             var label = $(this).closest(".form-group").find("label").first().text().trim();
             if (!label && id) label = id;
             if (label && missingFields.indexOf(label) === -1) {
@@ -207,6 +226,12 @@ function SendToComPort(isRecurrence) {
 
     if (!isRecurrence) {
         currentScanId++;
+        // Immediately reset Status badge and clear previous output tables
+        $("#info_status").val("TESTING...").css({ "background-color": "#ffc107", "color": "#000", "font-weight": "bold" });
+        $("#testResponse_0").empty();
+        $("#testResponse_1").empty();
+        $("#Testresponse").empty();
+        $("#printerStatusBadge").hide();
     }
     var scanId = currentScanId;
     $("#loadingbtn").show();
@@ -237,6 +262,7 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             $("#loadingbtn").hide();
 
             if (resp && resp.message) {
+                $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
                 if (typeof toastersetting === 'function') {
                     toastersetting(resp.message, "Error", "error", "#FF0000");
                 } else {
@@ -247,14 +273,29 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             }
 
             if (!isOk) {
+                $("#info_status").val("TESTING...").css({ "background-color": "#ffc107", "color": "#000", "font-weight": "bold" });
                 setTimeout(function () { SendToComPort(true) }, 50);
             }
 
-            $("#control_pv").val(resp.controlPv)
-            $("#sysRating").val(resp.sysRating)
-            $("#bCode").val(resp.model)
-            $("#testResponse_0").empty()
-            $("#testResponse_1").empty()
+            $("#control_pv").val(resp.controlPv);
+            $("#sysRating").val(resp.sysRating);
+            $("#bCode").val(resp.model);
+
+            // Update UI status field (#info_status) matching output table colors
+            if (resp.status == 1 || resp.status === 'PASS') {
+                if (resp.printerStatus) {
+                    $("#info_status").val("PASS (" + resp.printerStatus + ")").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                    showPrinterNotice(resp.printerStatus);
+                } else {
+                    $("#info_status").val("PASS").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                    $("#printerStatusBadge").hide();
+                }
+            } else if (resp.status == 2 || resp.status === 'FAIL') {
+                $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+            }
+
+            $("#testResponse_0").empty();
+            $("#testResponse_1").empty();
 
             $.each(resp.interType, function (i, v) {
                 var color = "white";
@@ -295,6 +336,7 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
         error: function (xhr, status) {
             $("#checkbtn").show();
             $("#loadingbtn").hide();
+            $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
             var msg = "Request to the device failed (" + (xhr.status || status) + "). Please rescan.";
             if (typeof toastersetting === 'function') {
                 toastersetting(msg, "Error", "error", "#FF0000");
@@ -332,13 +374,23 @@ function checkBarcode(barcode, port, baudRate, visualby, testedBy, productionLin
                 if (resp) {
                     var r = confirm("Barcode already tested, If you confirmed, previous entry would be delete.");
                     if (r) {
-                        insertIntoDatabase(barcode, port, baudRate, true, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId)
+                        insertIntoDatabase(barcode, port, baudRate, true, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId);
+                    } else {
+                        $("#loadingbtn").hide();
+                        var portVal = $("#com_port").val();
+                        if (portVal && portVal.length > 0) {
+                            $("#info_status").val("Enable").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                        } else {
+                            $("#info_status").val("Ready").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                        }
                     }
                 } else {
-                    insertIntoDatabase(barcode, port, baudRate, false, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId)
+                    insertIntoDatabase(barcode, port, baudRate, false, visualby, testedBy, productionLine, lineInCharge, serialCardNo, currentDate, currentTime, isRecurrense, scanId);
                 }
             },
             error: function (xhr, status) {
+                $("#loadingbtn").hide();
+                $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
             }
         })
     } else {
@@ -364,6 +416,9 @@ function setValueFromLocalStorage() {
 
     // Save Line selection
     localStorage.setItem("selectedLine", infoValue.line);
+
+    // Save Printer Name selection
+    localStorage.setItem("selectedPrinterName", infoValue.printerName);
 }
 
 function getValueFromLocalStorage() {
@@ -388,6 +443,13 @@ function getValueFromLocalStorage() {
     if (savedLine) {
         $("#ddlLine, #lineSelect").val(savedLine).trigger("change");
     }
+
+    // Auto-fill Printer Name from LocalStorage
+    var savedPrinterName = localStorage.getItem("selectedPrinterName");
+    if (savedPrinterName && $("#prnter option[value='" + savedPrinterName + "']").length > 0) {
+        $("#prnter").val(savedPrinterName);
+    }
+    updatePrinterStatus();
 }
 
 function getInfoValue() {
@@ -405,6 +467,7 @@ function getInfoValue() {
     infoValue.baudRate = parseInt($("#baudRate").val());//Baud Rate
     infoValue.printerModelId = $("#printerModel").val() ? $("#printerModel option:selected").val() : "";
     infoValue.line = ($("#ddlLine").val() || $("#lineSelect").val() || "");
+    infoValue.printerName = $("#prnter").val() || "";
 }
 
 function deleteResponse(id) {
@@ -429,6 +492,7 @@ var infoValue = {
     barCode: "", //1
     printerModelId: 0,
     line: "",
+    printerName: "",
     isRepeat: false,//4
     isRecurrence: true,
     disProgNo: "",
@@ -494,6 +558,12 @@ function validateFileds() {
 }
 
 function validatePrinterModel() {
+    var prodLine = $("#productionLine").val();
+    if (prodLine != '2') {
+        $("#printerModel").removeClass("isValidate").addClass("validate");
+        return true;
+    }
+
     var $printer = $("#printerModel");
     var printerModelVal = $printer.val();
     if (!printerModelVal || printerModelVal === "" || printerModelVal === "0") {
@@ -502,6 +572,25 @@ function validatePrinterModel() {
     }
     $printer.removeClass("isValidate").addClass("validate");
     return true;
+}
+
+function updatePrinterStatus() {
+    var prodLine = $("#productionLine").val();
+    if (prodLine == '2') {
+        // Assembly line: Printer is required
+        var val = $("#prnter").val();
+        if (!val || val === "" || val === "Select Printer" || val === "No printer connected") {
+            $("#printerStatusBadge").text("No printer connected").show();
+        } else {
+            $("#printerStatusBadge").hide();
+            $("#prnter").removeClass("isValidate");
+        }
+    } else {
+        // Card line (or non-assembly): Printer is not required
+        $("#printerStatusBadge").hide();
+        $("#prnter").removeClass("isValidate");
+        $("#printerModel").removeClass("isValidate");
+    }
 }
 
 function validateLine() {
@@ -521,4 +610,28 @@ function validateLine() {
         $select2Selection.removeClass("isValidate");
     }
     return true;
+}
+
+function showPrinterNotice(message) {
+    var prodLine = $("#productionLine").val();
+    if (prodLine != '2') {
+        $("#printerStatusBadge").hide();
+        return;
+    }
+
+    var noticeText = message || "No printer connected";
+    $("#printerStatusBadge").text(noticeText).show();
+
+    if (typeof $(document).Toasts === 'function') {
+        $(document).Toasts('create', {
+            class: 'bg-warning',
+            title: 'Printer Notice',
+            subtitle: 'Assembly',
+            body: '<i class="fas fa-exclamation-triangle mr-1"></i> ' + noticeText + '. Label printing skipped.',
+            autohide: true,
+            delay: 4000
+        });
+    } else if (typeof toastersetting === 'function') {
+        toastersetting(noticeText + ". Label printing skipped.", "Printer Notice", "warning", "#f0ad4e");
+    }
 }

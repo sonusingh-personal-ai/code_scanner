@@ -7,11 +7,16 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Collections.Concurrent;
 using System.IO.Ports;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Web.Mvc;
 using Utility;
+#if DEBUG
+using CodeScanner.Simulation;
+#endif
 
 namespace CodeScanner.Controllers
 {
@@ -166,32 +171,40 @@ namespace CodeScanner.Controllers
                 lock (_portLock)
                 {
                     Log.Info("@#Recurrence  : " + objResponse.IsRecurrence);
-                    if (!objResponse.IsRecurrence)
+#if DEBUG
+                    bool isSim = string.Equals(objResponse.Port, "SIMULATOR", StringComparison.OrdinalIgnoreCase);
+#else
+                    const bool isSim = false;
+#endif
+                    if (!isSim)
                     {
-                        CloseSerialPort();
-
-                        _serialPort = new SerialPort
-                        {
-                            PortName = objResponse.Port,
-                            BaudRate = objResponse.BaudRate > 0 ? objResponse.BaudRate : 9600,
-                            Parity = SetPortParity(Parity.None),
-                            DataBits = SetPortDataBits(8),
-                            StopBits = SetPortStopBits(StopBits.One),
-                            Handshake = SetPortHandshake(Handshake.None),
-                            ReadTimeout = ReadPerLineTimeoutMs
-                        };
-                        _serialPort.Open();
-                        _serialPort.WriteLine("#" + objResponse.Barcode + "@");
-                    }
-                    else
-                    {
-                        if (_serialPort == null || !_serialPort.IsOpen)
+                        if (!objResponse.IsRecurrence)
                         {
                             CloseSerialPort();
-                            matchString.status = (int)ResponseStatus.Fail;
-                            matchString.message = "Serial port " + objResponse.Port + " is closed or disconnected. Please scan again.";
-                            matchString.isOk = true;
-                            return Json(matchString, JsonRequestBehavior.AllowGet);
+
+                            _serialPort = new SerialPort
+                            {
+                                PortName = objResponse.Port,
+                                BaudRate = objResponse.BaudRate > 0 ? objResponse.BaudRate : 9600,
+                                Parity = SetPortParity(Parity.None),
+                                DataBits = SetPortDataBits(8),
+                                StopBits = SetPortStopBits(StopBits.One),
+                                Handshake = SetPortHandshake(Handshake.None),
+                                ReadTimeout = ReadPerLineTimeoutMs
+                            };
+                            _serialPort.Open();
+                            _serialPort.WriteLine("#" + objResponse.Barcode + "@");
+                        }
+                        else
+                        {
+                            if (_serialPort == null || !_serialPort.IsOpen)
+                            {
+                                CloseSerialPort();
+                                matchString.status = (int)ResponseStatus.Fail;
+                                matchString.message = "Serial port " + objResponse.Port + " is closed or disconnected. Please scan again.";
+                                matchString.isOk = true;
+                                return Json(matchString, JsonRequestBehavior.AllowGet);
+                            }
                         }
                     }
 
@@ -203,13 +216,9 @@ namespace CodeScanner.Controllers
 
                     while (t < OverallWatchdogSeconds)
                     {
-                        // Recomputed every iteration (previously this was only ever calculated
-                        // once, before the loop, and using TimeSpan.Seconds - which wraps back to
-                        // 0 every 60 seconds - so the 120s watchdog below never actually fired and
-                        // a genuinely silent device hung this request indefinitely).
                         t = DateTime.Now.Subtract(now).TotalSeconds;
 
-                        if (_serialPort == null || !_serialPort.IsOpen)
+                        if (!isSim && (_serialPort == null || !_serialPort.IsOpen))
                         {
                             CloseSerialPort();
                             matchString.status = (int)ResponseStatus.Fail;
@@ -219,18 +228,24 @@ namespace CodeScanner.Controllers
                         }
 
                         string rec;
-                        try
+#if DEBUG
+                        if (isSim)
                         {
-                            rec = _serialPort.ReadLine();
+                            bool isFailSim = objResponse.Barcode != null && objResponse.Barcode.IndexOf("FAIL", StringComparison.OrdinalIgnoreCase) >= 0;
+                            rec = JigSimulationEngine.GetNextFrame(setting, objResponse.Barcode, objResponse.IsRecurrence, isFailSim);
                         }
-                        catch (TimeoutException)
+                        else
+#endif
                         {
-                            // Nothing arrived within ReadPerLineTimeoutMs - this is the "missed"
-                            // case. Don't treat it as fatal by itself: log it and let the overall
-                            // watchdog (t, checked at the top of this loop) decide whether to keep
-                            // waiting for the device to catch up or give up for good.
-                            Log.Error("ComPortController.SendParameter - Read timeout waiting for device response (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
-                            continue;
+                            try
+                            {
+                                rec = _serialPort.ReadLine();
+                            }
+                            catch (TimeoutException)
+                            {
+                                Log.Error("ComPortController.SendParameter - Read timeout waiting for device response (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
+                                continue;
+                            }
                         }
 
                         Log.Info("Receving string :- " + rec);
@@ -301,6 +316,7 @@ namespace CodeScanner.Controllers
                                             Log.Info("****** RESULT FAIL ******");
                                             var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, true, ConProgNo, DisProgNo, SysRating, objResponse.PrinterModelId, objResponse.Line);
                                             matchString = CreateMatchResult(setting, response, stringObject);
+                                            matchString.status = (int)ResponseStatus.Fail;
                                             var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
                                             SaveQrCodePng(QrCodeString, Color.OrangeRed, Path.Combine(QrCodePath, objENResponse.Barcode + "_" + objENResponse.QcStatus + ".png"));
 
@@ -317,13 +333,38 @@ namespace CodeScanner.Controllers
                                             var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, false, ConProgNo, DisProgNo, SysRating, objResponse.PrinterModelId, objResponse.Line);
 
                                             matchString = CreateMatchResult(setting, response, stringObject);
+                                            matchString.status = (int)ResponseStatus.Pass;
                                             var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
                                             SaveQrCodePng(QrCodeString, Color.Black, Path.Combine(QrCodePath, objResponse.Barcode + "_" + objENResponse.QcStatus + ".png"));
 
                                             CloseSerialPort();
                                             if (objResponse.ProductionLine == 2)
                                             {
-                                                PrintQrCode(objENResponse.Barcode + "_" + objENResponse.QcStatus, objResponse.PrinterModelId, QrCodeString);
+                                                string printBarcode = $"{objENResponse.Barcode}_{objENResponse.QcStatus}";
+                                                int? printModelId = objResponse.PrinterModelId;
+                                                string printQrText = QrCodeString;
+                                                string printTargetName = objResponse.PrinterName;
+
+                                                bool isPrinterAttached = IsPhysicalPrinterAvailable(printTargetName);
+                                                if (isPrinterAttached)
+                                                {
+                                                    ThreadPool.QueueUserWorkItem(_ =>
+                                                    {
+                                                        try
+                                                        {
+                                                            PrintQrCode(printBarcode, printModelId, printQrText, printTargetName);
+                                                        }
+                                                        catch (Exception exPrint)
+                                                        {
+                                                            Log.Error($"[SendParameter] Background print error: {exPrint.Message}");
+                                                        }
+                                                    });
+                                                }
+                                                else
+                                                {
+                                                    matchString.printerStatus = "No printer connected";
+                                                    Log.Info("[SendParameter] No physical printer connected. Skipping print dispatch.");
+                                                }
                                             }
                                             return Json(matchString, JsonRequestBehavior.AllowGet);
                                         }

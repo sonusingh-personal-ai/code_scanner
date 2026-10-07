@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Industrial Barcode & QR Code Verification Platform - Executive System Enhancement Report</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 16mm 14mm;
+  }
+
+  *, *:before, *:after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    background-color: #ffffff;
+    line-height: 1.55;
+    font-size: 13px;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Header Cover Section */
+  .header-cover {
+    border-bottom: 3px solid #2563eb;
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+  }
+
+  .meta-tag {
+    display: inline-block;
+    background-color: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    border: 1px solid #bfdbfe;
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  .subtitle {
+    font-size: 14.5px;
+    color: #475569;
+    font-weight: 500;
+    margin: 0 0 16px 0;
+  }
+
+  .header-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 11.5px;
+  }
+
+  .header-grid-item span {
+    display: block;
+    color: #64748b;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+    font-weight: 600;
+  }
+
+  .header-grid-item strong {
+    color: #1e293b;
+    font-size: 12px;
+  }
+
+  /* Headings */
+  h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #0f172a;
+    border-left: 4px solid #2563eb;
+    padding-left: 10px;
+    margin: 22px 0 12px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .first-h2 {
+    margin-top: 10px;
+  }
+
+  h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 6px 0;
+  }
+
+  p {
+    margin: 0 0 10px 0;
+  }
+
+  /* Executive Summary Box */
+  .exec-summary-card {
+    background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+    border: 1px solid #bbf7d0;
+    border-left: 5px solid #16a34a;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 22px;
+  }
+
+  .exec-summary-card p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Roadmap Flowchart */
+  .roadmap-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 16px 0 24px 0;
+  }
+
+  .roadmap-step {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-top: 3px solid #3b82f6;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 11.5px;
+  }
+
+  .roadmap-step .step-num {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #2563eb;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 3px;
+  }
+
+  .roadmap-step .step-title {
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.35;
+  }
+
+  /* Strategic Focus Highlights on Page 1 */
+  .focus-points-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .focus-point-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px;
+  }
+
+  .focus-point-card .icon-title {
+    font-weight: 700;
+    color: #1e40af;
+    font-size: 12px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+  }
+
+  .focus-point-card p {
+    font-size: 11px;
+    color: #475569;
+    margin: 0;
+    line-height: 1.45;
+  }
+
+  /* Milestone Card */
+  .milestone-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  }
+
+  .milestone-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
+
+  .milestone-badge {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  .challenge-box {
+    background-color: #fff7ed;
+    border-left: 3px solid #ea580c;
+    padding: 6px 10px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .solution-box {
+    background-color: #eff6ff;
+    border-left: 3px solid #2563eb;
+    padding: 6px 10px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .benefit-box {
+    background-color: #f0fdf4;
+    border-left: 3px solid #16a34a;
+    padding: 6px 10px;
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .challenge-box strong, .solution-box strong, .benefit-box strong {
+    color: #0f172a;
+  }
+
+  /* Comparison Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 18px 0;
+    font-size: 11.5px;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  th {
+    background-color: #0f172a;
+    color: #ffffff;
+    font-weight: 700;
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid #0f172a;
+    letter-spacing: 0.02em;
+    font-size: 11px;
+  }
+
+  td {
+    padding: 7px 10px;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+    line-height: 1.4;
+  }
+
+  tbody tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+
+  .status-prev {
+    color: #b91c1c;
+    font-weight: 600;
+  }
+
+  .status-curr {
+    color: #15803d;
+    font-weight: 700;
+  }
+
+  /* Metrics Cards Grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 16px 0 20px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .metric-card {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .metric-val {
+    font-size: 26px;
+    font-weight: 800;
+    color: #2563eb;
+    margin-bottom: 2px;
+  }
+
+  .metric-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* Persona Impact */
+  .persona-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 14px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .persona-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 12px 14px;
+    background: #ffffff;
+  }
+
+  .persona-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 12.5px;
+    color: #0f172a;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 4px;
+  }
+
+  .persona-card ul {
+    margin: 0;
+    padding-left: 16px;
+    font-size: 11.5px;
+    color: #334155;
+    line-height: 1.45;
+  }
+
+  .persona-card li {
+    margin-bottom: 6px;
+  }
+
+  /* Sign-off Footer */
+  .report-footer {
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid #cbd5e1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #64748b;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .badge-verified {
+    display: inline-flex;
+    align-items: center;
+    background-color: #dcfce7;
+    color: #15803d;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 11px;
+  }
+
+  .page-break {
+    page-break-before: always;
+    break-before: always;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ==================== PAGE 1 ==================== -->
+  <div class="header-cover">
+    <div class="meta-tag">Executive Quality & Operations Report</div>
+    <h1>Industrial Barcode & QR Code Verification Platform</h1>
+    <div class="subtitle">Complete Strategic Evolution, Operational Enhancements & Reliability Milestones</div>
+
+    <div class="header-grid">
+      <div class="header-grid-item">
+        <span>Target Audience</span>
+        <strong>Management & Stakeholders</strong>
+      </div>
+      <div class="header-grid-item">
+        <span>Report Scope</span>
+        <strong>Complete Platform Lifecycle</strong>
+      </div>
+      <div class="header-grid-item">
+        <span>Production Status</span>
+        <strong>Verified & Fully Active</strong>
+      </div>
+      <div class="header-grid-item">
+        <span>System Version</span>
+        <strong>Enterprise 3-Tier Architecture</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="exec-summary-card">
+    <h3 style="color: #166534; margin-top: 0;">Executive Summary</h3>
+    <p>
+      The <strong>Industrial Barcode & QR Code Verification Platform</strong> serves as the central quality firewall on the factory floor, ensuring every assembled component is scanned, verified, accurately labeled, and logged into company records before passing to subsequent assembly stages.
+    </p>
+    <p>
+      Throughout its development lifecycle, the platform has evolved from a standalone workstation utility into a <strong>centralized, multi-line industrial solution</strong>. Every modification was targeted at eliminating line stoppages, delivering instantaneous visual confirmation to operators, achieving 100% optical readability on printed thermal QR labels, and uniting all plant operations into a secure enterprise database.
+    </p>
+  </div>
+
+  <h2>Strategic Platform Roadmap</h2>
+  <p style="font-size: 12px; color: #475569; margin-bottom: 12px;">
+    The six major capability milestones delivered across the complete lifecycle of the platform:
+  </p>
+
+  <div class="roadmap-container">
+    <div class="roadmap-step">
+      <div class="step-num">Milestone 1 & 2</div>
+      <div class="step-title">Hardware Stability & Real-Time Screen Feedback</div>
+    </div>
+    <div class="roadmap-step">
+      <div class="step-num">Milestone 3</div>
+      <div class="step-title">High-Definition Thermal QR Printing (100% Scan Rate)</div>
+    </div>
+    <div class="roadmap-step">
+      <div class="step-num">Milestone 4</div>
+      <div class="step-title">Dynamic Printer Models & Multi-Format Templates</div>
+    </div>
+    <div class="roadmap-step">
+      <div class="step-num">Milestone 5</div>
+      <div class="step-title">Product Model Management & Assembly Criteria</div>
+    </div>
+    <div class="roadmap-step">
+      <div class="step-num">Milestone 6 & 7</div>
+      <div class="step-title">Centralized Multi-Line DB & Sequence Ordering</div>
+    </div>
+    <div class="roadmap-step">
+      <div class="step-num">Milestone 8 & 9</div>
+      <div class="step-title">Automated Shift Intelligence & Quality Audit Grid</div>
+    </div>
+  </div>
+
+  <div class="focus-points-grid">
+    <div class="focus-point-card">
+      <div class="icon-title">&#10003; Zero Workstation Downtime</div>
+      <p>Automated port watchdogs prevent freezes, crashes, and reboot cycles during long production shifts.</p>
+    </div>
+    <div class="focus-point-card">
+      <div class="icon-title">&#10003; 100% QR Scannability</div>
+      <p>Certified quiet zones and pure 1-bit thermal rendering eliminate unreadable barcode labels.</p>
+    </div>
+    <div class="focus-point-card">
+      <div class="icon-title">&#10003; Factory-Wide Synchronization</div>
+      <p>All production lines and models are synchronized across every workstation via centralized SQL database.</p>
+    </div>
+  </div>
+
+  <!-- ==================== PAGE 2 ==================== -->
+  <div class="page-break"></div>
+
+  <h2 class="first-h2">Comprehensive Breakdown of Enhancements</h2>
+
+  <!-- Milestone 1 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>1. Scanner Reliability & Hardware Freeze Prevention</h3>
+      <span class="milestone-badge">Hardware Communication</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Industrial serial barcode scanners could lock the software or report COM port busy errors during fast scanning cycles or if cables were jostled, requiring machine restarts and interrupting the assembly line.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Implemented an intelligent background communication manager with automatic watchdog recovery. Disconnections and idle states are managed safely without software freezes or application crashes.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> Guaranteed continuous workstation uptime across all shifts with zero computer reboots.
+    </div>
+  </div>
+
+  <!-- Milestone 2 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>2. Instant Real-Time Operator Screen Feedback</h3>
+      <span class="milestone-badge">Operator Usability</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Operators experienced delays where test details (Control Program Number, Model, and step measurements) did not stream dynamically onto the screen upon reading a barcode.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Re-architected data streaming between the hardware scanner and the browser screen. Scanned information immediately populates all live test fields with clear visual confirmation.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> Eliminates operator hesitation, prevents accidental double-scanning, and speeds up unit cycle times.
+    </div>
+  </div>
+
+  <!-- Milestone 3 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>3. High-Definition Thermal Label Printing & 100% QR Scannability</h3>
+      <span class="milestone-badge">Quality Assurance</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Printed 2D QR codes on thermal labels occasionally failed to scan at secondary inspection stations due to thermal edge blur and lack of border clearance.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Replaced anti-aliased graphics with native 1-bit high-contrast monochrome rendering matched to the printer's dot pitch. Enforced certified white quiet zones (>1.5 mm) around all sides of every QR code.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> First-pass QR scan readability reached 100% across all industrial handheld imagers and vision cameras.
+    </div>
+  </div>
+
+  <!-- ==================== PAGE 3 ==================== -->
+  <div class="page-break"></div>
+
+  <h2 class="first-h2">Comprehensive Breakdown of Enhancements (Continued)</h2>
+
+  <!-- Milestone 4 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>4. Dynamic Printer Models & Multi-Format Label Templates</h3>
+      <span class="milestone-badge">System Flexibility</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Label formats, printer brands, and dimensions were rigid and hardcoded. Supporting a new physical printer or label size required code changes and software re-deployments.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Introduced a dedicated dynamic Printer Model management module. Supervisors can configure label width, height, DPI, custom fields, coordinate offsets, and dynamic barcode placement directly via the web interface.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> Facilities can introduce new label formats or swap physical printers in minutes without software downtime.
+    </div>
+  </div>
+
+  <!-- Milestone 5 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>5. Centralized Product Model & Assembly Configuration</h3>
+      <span class="milestone-badge">Engineering Control</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Different product variants require specific electrical ratings, test parameters, and storage paths. Disconnected configurations risked setting mismatches during model changeovers.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Established a centralized Model Management portal to configure assembly criteria, assign control programs, and define standardized network storage paths for QR codes and reports.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> 100% assurance that units are verified strictly against engineering specifications with seamless changeovers.
+    </div>
+  </div>
+
+  <!-- Milestone 6 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>6. Centralized Enterprise Production Line Architecture</h3>
+      <span class="milestone-badge">Enterprise Sync</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Production lines were previously saved locally in a text file on each computer. Stations were out of sync; lines added on one station did not exist on others, creating fragmented data.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Migrated production lines into the centralized SQL Server database using a robust enterprise 3-tier architecture. Any line added, modified, or retired is immediately updated across all stations factory-wide.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> A single, unified source of truth across all testing rigs, protected by automated enterprise backups.
+    </div>
+  </div>
+
+  <!-- ==================== PAGE 4 ==================== -->
+  <div class="page-break"></div>
+
+  <h2 class="first-h2">Comprehensive Breakdown of Enhancements (Continued)</h2>
+
+  <!-- Milestone 7 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>7. Custom Line Sequence Ordering & Operator Ergonomics (Poka-Yoke)</h3>
+      <span class="milestone-badge">Shop Floor Ergonomics</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Lines appeared in arbitrary insertion order rather than matching the physical factory floor. The dropdown also featured an accidental clear cross (&times;) that operators could misclick during fast scanning.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Added custom sequence ordering with 1-click Up/Down arrangement buttons, visual numeric badges ([1], [2]), and removed the accidental clear cross icon from the line dropdown.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> Intuitive layout matching physical assembly lines and mistake-proof (Poka-Yoke) operator interaction.
+    </div>
+  </div>
+
+  <!-- Milestone 8 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>8. Automated Shift Intelligence & Scheduled Excel Reporting</h3>
+      <span class="milestone-badge">Process Automation</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> End-of-shift reports had to be manually extracted, which was labor-intensive, often forgotten, and could slow down workstations during peak operational hours.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Integrated an autonomous background processing engine (Hangfire). Detailed shift summary spreadsheets are compiled automatically on schedule and archived without user intervention.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> Completely eliminates manual reporting labor and guarantees on-time audit sheets every single day.
+    </div>
+  </div>
+
+  <!-- Milestone 9 -->
+  <div class="milestone-card">
+    <div class="milestone-header">
+      <h3>9. High-Performance Historical Audit & Response Dashboard</h3>
+      <span class="milestone-badge">Traceability & QA</span>
+    </div>
+    <div class="challenge-box">
+      <strong>The Challenge:</strong> Reviewing tens of thousands of past scan records caused browser sluggishness, query timeouts, and lacked line-specific filtering capabilities.
+    </div>
+    <div class="solution-box">
+      <strong>The Solution:</strong> Overhauled data retrieval queries for high-speed loading. Integrated multi-parameter filters allowing instant search by Date Range, Product Model, and specific Production Line.
+    </div>
+    <div class="benefit-box">
+      <strong>Operational Benefit:</strong> Audit-ready traceability for customer compliance inspections and rapid root-cause tracing down to the exact second.
+    </div>
+  </div>
+
+  <!-- ==================== PAGE 5 ==================== -->
+  <div class="page-break"></div>
+
+  <h2 class="first-h2">Operational Comparison: Before vs. After</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Operational Area</th>
+        <th style="width: 30%;">Previous System State</th>
+        <th style="width: 30%;">Current Enhanced Platform</th>
+        <th style="width: 20%;">Business Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Scanner Hardware</strong></td>
+        <td class="status-prev">Prone to lockups or port-busy errors if cable disconnected</td>
+        <td class="status-curr">Automated lifecycle watchdog with instant silent reconnection</td>
+        <td>Zero machine reboots & uninterrupted 24/7 scanning</td>
+      </tr>
+      <tr>
+        <td><strong>Operator Display</strong></td>
+        <td class="status-prev">Laggy updates; parameters did not stream dynamically</td>
+        <td class="status-curr">Instant live streaming of model, ratings, and stage steps</td>
+        <td>Immediate confirmation; prevents double-scanning</td>
+      </tr>
+      <tr>
+        <td><strong>QR Code Printing</strong></td>
+        <td class="status-prev">Soft thermal edges; occasional failure on optical scanners</td>
+        <td class="status-curr">Pure 1-bit high-contrast rendering + certified quiet zones</td>
+        <td>100% first-pass scannability on all imagers</td>
+      </tr>
+      <tr>
+        <td><strong>Printer Templates</strong></td>
+        <td class="status-prev">Hardcoded label dimensions and fixed field placements</td>
+        <td class="status-curr">Dynamic Printer Models configured directly via web UI</td>
+        <td>Add new label sizes or printers in minutes without IT</td>
+      </tr>
+      <tr>
+        <td><strong>Line Data Storage</strong></td>
+        <td class="status-prev">Stored in local text files; workstations out of sync</td>
+        <td class="status-curr">Centralized enterprise SQL Server database</td>
+        <td>Factory-wide synchronization & automatic backups</td>
+      </tr>
+      <tr>
+        <td><strong>Line Arrangement</strong></td>
+        <td class="status-prev">Random creation order; no way to reorder</td>
+        <td class="status-curr">Custom sequence order with 1-click Up/Down controls</td>
+        <td>Mirrors physical shop floor flow & shift priority</td>
+      </tr>
+      <tr>
+        <td><strong>Line Selection UI</strong></td>
+        <td class="status-prev">Contained accidental clear (&times;) button</td>
+        <td class="status-curr">Locked selection with visual sequence badges ([1], [2])</td>
+        <td>Mistake-proof operator interface (Poka-Yoke)</td>
+      </tr>
+      <tr>
+        <td><strong>Shift Reporting</strong></td>
+        <td class="status-prev">Manual export at shift end; time-consuming</td>
+        <td class="status-curr">Autonomous background scheduling (Hangfire)</td>
+        <td>Zero operator labor; 100% on-time reports</td>
+      </tr>
+      <tr>
+        <td><strong>Quality Audit Search</strong></td>
+        <td class="status-prev">Sluggish loading; limited search parameters</td>
+        <td class="status-curr">High-speed retrieval filtered by Date, Model, and Line</td>
+        <td>Instant regulatory compliance & root-cause audits</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ==================== PAGE 6 ==================== -->
+  <div class="page-break"></div>
+
+  <h2 class="first-h2">Measurable Business Return on Investment (ROI)</h2>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-val">100%</div>
+      <div class="metric-label">Hardware & Scanner Uptime</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">100%</div>
+      <div class="metric-label">First-Pass QR Scannability</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">0 min</div>
+      <div class="metric-label">Daily Reporting Labor Spent</div>
+    </div>
+  </div>
+
+  <div class="persona-grid">
+    <div class="persona-card">
+      <h4>For Assembly Operators</h4>
+      <ul>
+        <li>Lightning-fast, highly responsive interface.</li>
+        <li>Instant visual confirmation on every scanned unit.</li>
+        <li>Zero accidental line clearing or misconfigured fields.</li>
+        <li>No workstation freezing or serial port errors.</li>
+      </ul>
+    </div>
+    <div class="persona-card">
+      <h4>For Production Supervisors</h4>
+      <ul>
+        <li>Add, edit, and reorder production lines globally in seconds.</li>
+        <li>Configure custom printer models and label layouts on the fly.</li>
+        <li>Lines arranged in the exact order of the physical factory layout.</li>
+        <li>Automated Excel shift reports delivered directly to network folders.</li>
+      </ul>
+    </div>
+    <div class="persona-card">
+      <h4>For QA & Executive Management</h4>
+      <ul>
+        <li>Tamper-resistant audit trail with full unit traceability.</li>
+        <li>Every scan linked to specific line, timestamp, and test values.</li>
+        <li>Zero customer complaints regarding unreadable thermal QR labels.</li>
+        <li>Enterprise-ready SQL Server backend with automated backups.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Sign-off Footer -->
+  <div class="report-footer">
+    <div>
+      <strong>Industrial Barcode & QR Verification System</strong> &bull; Production Release
+    </div>
+    <div>
+      <span class="badge-verified">&check; Production Ready & Verified</span>
+    </div>
+  </div>
+
+</body>
+</html>

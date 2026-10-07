@@ -113,8 +113,31 @@
         });
 
         $("#prnter").empty();
+        var physicalPrinterCount = 0;
         $.each(printerList, function(indx, val){
-            $("#prnter").append("<option value='"+val.Key +"'>"+val.Value+"</option>");
+            var isVirtual = /Print to PDF|XPS Document|OneNote|Fax|PORTPROMPT/i.test(val.Value);
+            if (!isVirtual) {
+                physicalPrinterCount++;
+                $("#prnter").append("<option value='"+val.Key +"'>"+val.Value+"</option>");
+            }
+        });
+
+        if (physicalPrinterCount === 0) {
+            $("#prnter").append("<option value=''>No printer connected</option>");
+        } else {
+            $("#prnter").prepend("<option value=''>Select Printer</option>");
+        }
+
+        $("#prnter").on("change", function () {
+            var val = $(this).val();
+            if (val) {
+                localStorage.setItem("selectedPrinterName", val);
+            } else {
+                localStorage.removeItem("selectedPrinterName");
+            }
+            if (typeof updatePrinterStatus === 'function') {
+                updatePrinterStatus();
+            }
         });
 
         $("#visualBy").append("<option value=''>Select Visual By</option>");
@@ -147,9 +170,9 @@
         });
 
         if (port.length > 0) {
-            $("#info_status").val("Enable").css("background", "green");
+            $("#info_status").val("Enable").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
         } else {
-            $("#info_status").val("Disable").css("background", "red");
+            $("#info_status").val("Disable").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
         }
 
         setInfo();
@@ -227,6 +250,9 @@
             setTimeout(function() {
                 $("#serialCardNo").focus();
             }, 100);
+        }
+        if (typeof updatePrinterStatus === 'function') {
+            updatePrinterStatus();
         }
     }
 
@@ -543,7 +569,10 @@
                     <input class="form-control" id="serialCardNo" maxlength="20" />
                 </div>
                 <div class="form-group">
-                    <label>Printer List</label>
+                    <label class="d-flex justify-content-between align-items-center w-100 mb-1">
+                        <span>Printer List</span>
+                        <small id="printerStatusBadge" class="text-danger font-weight-bold" style="display:none; font-size: 11px;"></small>
+                    </label>
                     <select id="prnter" class="form-control">
                         <option>Select</option>
                     </select>
