@@ -7,9 +7,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Drawing.Printing;
 using System.Globalization;
+using System.Web.SessionState;
 
 namespace CodeScanner.Controllers
 {
+    [SessionState(SessionStateBehavior.ReadOnly)]
     public class HomeController : Controller
     {
         // GET: Home
@@ -34,11 +36,13 @@ namespace CodeScanner.Controllers
 #endif
 
             var printerDropdown = new List<enGenericDropdown>();
-            PrintDocument pd = new PrintDocument();
             foreach (var item in PrinterSettings.InstalledPrinters)
             {
                 printerDropdown.Add(new enGenericDropdown() { Key = item.ToString(), Value = item.ToString() });
             }
+#if DEBUG
+            printerDropdown.Add(new enGenericDropdown() { Key = "SIMULATOR_PRINTER", Value = "SIMULATOR (Virtual Label Printer)" });
+#endif
 
             var listOfOfficeMembers = new List<enOfficeMember>();
             var objENOfficeMember = new enOfficeMember();
@@ -88,6 +92,84 @@ namespace CodeScanner.Controllers
         {
             var lines = LineConfigHelper.GetLines();
             return Json(lines, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpGet]
+        public JsonResult GetShiftStats(int? line = null)
+        {
+            try
+            {
+                int total = 0;
+                int passed = 0;
+                int failed = 0;
+
+                using (var conn = new System.Data.SqlClient.SqlConnection(Utility.ApplicationSettings.DefaultConnectionString))
+                {
+                    conn.Open();
+                    string sql = @"
+                        SELECT 
+                            COUNT(r.Id) as Total,
+                            ISNULL(SUM(CASE WHEN s.Status = 'PASS' THEN 1 ELSE 0 END), 0) as Passed,
+                            ISNULL(SUM(CASE WHEN s.Status IN ('FAIL', 'FAULT') THEN 1 ELSE 0 END), 0) as Failed
+                        FROM Response r
+                        OUTER APPLY (
+                            SELECT TOP 1 Status 
+                            FROM ResponseSummary 
+                            WHERE ResponseId = r.Id 
+                            ORDER BY Id DESC
+                        ) s
+                        WHERE r.CreatedOn >= CAST(GETDATE() AS DATE)
+                          AND (@Line IS NULL OR r.Line = @Line)";
+
+                    using (var cmd = new System.Data.SqlClient.SqlCommand(sql, conn))
+                    {
+                        if (line.HasValue && line.Value > 0)
+                        {
+                            cmd.Parameters.AddWithValue("@Line", line.Value);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue("@Line", DBNull.Value);
+                        }
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                total = Convert.ToInt32(reader["Total"]);
+                                passed = Convert.ToInt32(reader["Passed"]);
+                                failed = Convert.ToInt32(reader["Failed"]);
+                            }
+                        }
+                    }
+                }
+
+                double yieldRate = total > 0 ? Math.Round(((double)passed / total) * 100.0, 1) : 100.0;
+
+                return Json(new
+                {
+                    success = true,
+                    total = total,
+                    passed = passed,
+                    failed = failed,
+                    yieldRate = yieldRate,
+                    date = DateTime.Now.ToString("dd/MM/yyyy")
+                }, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                try { Log.Error("GetShiftStats error: " + ex); } catch { }
+                return Json(new
+                {
+                    success = false,
+                    total = 0,
+                    passed = 0,
+                    failed = 0,
+                    yieldRate = 100.0,
+                    date = DateTime.Now.ToString("dd/MM/yyyy"),
+                    message = ex.Message
+                }, JsonRequestBehavior.AllowGet);
+            }
         }
 
         [HttpPost]
@@ -406,6 +488,36 @@ namespace CodeScanner.Controllers
                     Log.Error("Error to create excel on Daily Daily Report \n");
                     Log.Error("Exception : " + i.Data);
                 }
+            }
+        }
+
+        [HttpGet]
+        public JsonResult CheckPrinterStatus(string printerName)
+        {
+            var result = ComPortHelperController.VerifyPrinterConnection(printerName);
+            return Json(result, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpGet]
+        public JsonResult GetComPorts()
+        {
+            try
+            {
+                var ports = new List<enGenericDropdown>();
+                var listOfPorts = SerialPort.GetPortNames().Distinct().OrderBy(p => p).ToList();
+                foreach (var item in listOfPorts)
+                {
+                    ports.Add(new enGenericDropdown { Key = item, Value = item });
+                }
+#if DEBUG
+                ports.Add(new enGenericDropdown { Key = "SIMULATOR", Value = "SIMULATOR (Virtual Jig)" });
+#endif
+                return Json(new { success = true, ports = ports }, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("GetComPorts error: " + ex);
+                return Json(new { success = false, ports = new List<enGenericDropdown>(), message = ex.Message }, JsonRequestBehavior.AllowGet);
             }
         }
     }
