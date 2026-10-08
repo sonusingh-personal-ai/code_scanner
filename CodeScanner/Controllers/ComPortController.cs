@@ -13,6 +13,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Web.Mvc;
+using System.Web.SessionState;
 using Utility;
 #if DEBUG
 using CodeScanner.Simulation;
@@ -20,20 +21,18 @@ using CodeScanner.Simulation;
 
 namespace CodeScanner.Controllers
 {
+    [SessionState(SessionStateBehavior.Disabled)]
     public class ComPortController : ComPortHelperController
     {
         static SerialPort _serialPort;
 
         // How long to wait for a single line from the device before treating that
-        // particular read as "missed". Without this, SerialPort.ReadLine() blocks
-        // forever by default (ReadTimeout = -1), so one missed response from the
-        // device hung this request - and the browser, since SendParameter is called
-        // with a synchronous AJAX call - indefinitely.
+        // particular read as "missed".
         const int ReadPerLineTimeoutMs = 5000;
 
         // Total time (seconds) to keep waiting/retrying reads for a PASS/FAIL before
         // giving up on this scan entirely and returning a clear timeout result.
-        const double OverallWatchdogSeconds = 120;
+        const double OverallWatchdogSeconds = 15;
         // _serialPort is shared (static) across every request, and by design stays open
         // across separate HTTP requests while a scan's parameters stream in (see
         // IsRecurrence below). Without serializing access, two overlapping requests -
@@ -43,28 +42,34 @@ namespace CodeScanner.Controllers
 
         private static void CloseSerialPort()
         {
-            if (_serialPort != null)
+            var portToClose = _serialPort;
+            _serialPort = null;
+            if (portToClose != null)
             {
-                try
+                // Disconnect asynchronously in background to avoid blocking ASP.NET request threads
+                // when unmanaged serial driver is stalled from a physical USB disconnect
+                ThreadPool.QueueUserWorkItem(_ =>
                 {
-                    if (_serialPort.IsOpen)
+                    try
                     {
-                        _serialPort.Close();
+                        if (portToClose.IsOpen)
+                        {
+                            portToClose.Close();
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("Error closing serial port: " + ex.Message);
-                }
-                try
-                {
-                    _serialPort.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("Error disposing serial port: " + ex.Message);
-                }
-                _serialPort = null;
+                    catch (Exception ex)
+                    {
+                        Log.Error("Error closing serial port: " + ex.Message);
+                    }
+                    try
+                    {
+                        portToClose.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error("Error disposing serial port: " + ex.Message);
+                    }
+                });
             }
         }
 
@@ -218,13 +223,27 @@ namespace CodeScanner.Controllers
                     {
                         t = DateTime.Now.Subtract(now).TotalSeconds;
 
-                        if (!isSim && (_serialPort == null || !_serialPort.IsOpen))
+                        if (!isSim)
                         {
-                            CloseSerialPort();
-                            matchString.status = (int)ResponseStatus.Fail;
-                            matchString.message = "Serial port " + objResponse.Port + " was closed during read.";
-                            matchString.isOk = true;
-                            return Json(matchString, JsonRequestBehavior.AllowGet);
+                            // Instant detection: if Windows device manager no longer lists the port, USB was detached!
+                            if (!SerialPort.GetPortNames().Contains(objResponse.Port))
+                            {
+                                CloseSerialPort();
+                                matchString.status = (int)ResponseStatus.Fail;
+                                matchString.message = $"COM Port '{objResponse.Port}' was disconnected from the system.";
+                                matchString.isOk = true;
+                                Log.Warn($"[SendParameter] Port '{objResponse.Port}' disconnected during loop.");
+                                return Json(matchString, JsonRequestBehavior.AllowGet);
+                            }
+
+                            if (_serialPort == null || !_serialPort.IsOpen)
+                            {
+                                CloseSerialPort();
+                                matchString.status = (int)ResponseStatus.Fail;
+                                matchString.message = "Serial port " + objResponse.Port + " was closed during read.";
+                                matchString.isOk = true;
+                                return Json(matchString, JsonRequestBehavior.AllowGet);
+                            }
                         }
 
                         string rec;
@@ -243,8 +262,34 @@ namespace CodeScanner.Controllers
                             }
                             catch (TimeoutException)
                             {
+                                if (!SerialPort.GetPortNames().Contains(objResponse.Port))
+                                {
+                                    CloseSerialPort();
+                                    matchString.status = (int)ResponseStatus.Fail;
+                                    matchString.message = $"COM Port '{objResponse.Port}' was disconnected. Please check the cable.";
+                                    matchString.isOk = true;
+                                    return Json(matchString, JsonRequestBehavior.AllowGet);
+                                }
                                 Log.Error("ComPortController.SendParameter - Read timeout waiting for device response (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
                                 continue;
+                            }
+                            catch (IOException ioEx)
+                            {
+                                CloseSerialPort();
+                                matchString.status = (int)ResponseStatus.Fail;
+                                matchString.message = $"COM Port '{objResponse.Port}' disconnected / error: {ioEx.Message}";
+                                matchString.isOk = true;
+                                Log.Error("ComPortController.SendParameter IOException: " + ioEx);
+                                return Json(matchString, JsonRequestBehavior.AllowGet);
+                            }
+                            catch (UnauthorizedAccessException uaEx)
+                            {
+                                CloseSerialPort();
+                                matchString.status = (int)ResponseStatus.Fail;
+                                matchString.message = $"COM Port '{objResponse.Port}' access lost / disconnected.";
+                                matchString.isOk = true;
+                                Log.Error("ComPortController.SendParameter UnauthorizedAccessException: " + uaEx);
+                                return Json(matchString, JsonRequestBehavior.AllowGet);
                             }
                         }
 
@@ -311,11 +356,15 @@ namespace CodeScanner.Controllers
                                         Log.Info(listOfOfficeMembers.Count.ToString());
                                         var productinLine = objResponse.ProductionLine == 1 ? "Card" : "Assembly";
                                         t = OverallWatchdogSeconds + 1;
+
+                                        string resolvedDisProgNo = GetDisplayProgramNumber(listOfOfficeMembers, objResponse.DisProgNo, response[1]);
+
                                         if (matchStr == "FAIL")
                                         {
                                             Log.Info("****** RESULT FAIL ******");
-                                            var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, true, ConProgNo, DisProgNo, SysRating, objResponse.PrinterModelId, objResponse.Line);
-                                            matchString = CreateMatchResult(setting, response, stringObject);
+                                            var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, true, ConProgNo, resolvedDisProgNo, SysRating, objResponse.PrinterModelId, objResponse.Line);
+                                            matchString = CreateMatchResult(setting, response, stringObject, true, nrec);
+                                            matchString.displayPv = resolvedDisProgNo;
                                             matchString.status = (int)ResponseStatus.Fail;
                                             var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
                                             SaveQrCodePng(QrCodeString, Color.OrangeRed, Path.Combine(QrCodePath, objENResponse.Barcode + "_" + objENResponse.QcStatus + ".png"));
@@ -330,9 +379,10 @@ namespace CodeScanner.Controllers
 
                                             Log.Info("****** RESULT PASS ******");
                                             Log.Info("Model Value \n" + objResponse.VisualBy + " " + objResponse.TestedBy + " " + objResponse.ProductionLine + " " + objResponse.ProcessEngg);
-                                            var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, false, ConProgNo, DisProgNo, SysRating, objResponse.PrinterModelId, objResponse.Line);
+                                            var resp = SaveReponse(setting, response, objResponse.Barcode, true, objResponse.QcStatus, objResponse.VisualBy, objResponse.TestedBy, objResponse.ProductionLine, objResponse.ProcessEngg, objResponse.SerialCardNo, objResponse.CurrentDate, objResponse.CurrentTime, false, ConProgNo, resolvedDisProgNo, SysRating, objResponse.PrinterModelId, objResponse.Line);
 
-                                            matchString = CreateMatchResult(setting, response, stringObject);
+                                            matchString = CreateMatchResult(setting, response, stringObject, true, nrec);
+                                            matchString.displayPv = resolvedDisProgNo;
                                             matchString.status = (int)ResponseStatus.Pass;
                                             var QrCodeString = GenerateQrCodeString(objResponse, resp, listOfOfficeMembers, productinLine, matchString);
                                             SaveQrCodePng(QrCodeString, Color.Black, Path.Combine(QrCodePath, objResponse.Barcode + "_" + objENResponse.QcStatus + ".png"));
@@ -378,6 +428,7 @@ namespace CodeScanner.Controllers
                                         matchString.totalString = stringObject;
                                         matchString.SettingInfoList = setting.SettingInfo;
                                         matchString.model = setting.Model.Name;
+                                        matchString.rawData = nrec;
                                         return Json(matchString, JsonRequestBehavior.AllowGet);
                                     }
                                 }
@@ -464,7 +515,7 @@ namespace CodeScanner.Controllers
                 }
 
                 string testedByName = GetMemberName(listOfOfficeMembers, objResponse.TestedBy);
-                string displayPv = matchString?.displayPv ?? string.Empty;
+                string displayPv = GetDisplayProgramNumber(listOfOfficeMembers, objResponse.DisProgNo, matchString?.displayPv);
                 string controlPv = matchString?.controlPv ?? string.Empty;
 
                 // Populate directly from original dynamic objects (No static/testing strings)
@@ -533,13 +584,41 @@ namespace CodeScanner.Controllers
             return member != null ? member.Name : string.Empty;
         }
 
-        private enSettingResponse CreateMatchResult(enSetting setting, string[] response, List<List<string>> stringObject, bool isOk = true)
+        // Helper method to resolve Display Program Number from office members or fallback to device response
+        private static string GetDisplayProgramNumber(List<enOfficeMember> members, string disProgNo, string fallbackFromDevice)
+        {
+            if (!string.IsNullOrWhiteSpace(disProgNo))
+            {
+                int memberId;
+                if (int.TryParse(disProgNo, out memberId))
+                {
+                    var member = members?.FirstOrDefault(x => x.ID == memberId && x.Type == (int)Utility.OfficeMember.ProgDisNo);
+                    if (member == null)
+                    {
+                        member = members?.FirstOrDefault(x => x.ID == memberId);
+                    }
+                    if (member != null && !string.IsNullOrWhiteSpace(member.Name))
+                    {
+                        return member.Name.Trim();
+                    }
+                }
+                else
+                {
+                    return disProgNo.Trim();
+                }
+            }
+
+            return fallbackFromDevice?.Trim() ?? string.Empty;
+        }
+
+        private enSettingResponse CreateMatchResult(enSetting setting, string[] response, List<List<string>> stringObject, bool isOk = true, string rawData = null)
         {
             var matchString = CompairFile(setting, response);
             matchString.totalString = stringObject;
             matchString.SettingInfoList = setting.SettingInfo;
             matchString.model = setting.Model.Name;
             matchString.isOk = isOk;
+            matchString.rawData = rawData;
             return matchString;
         }
 

@@ -174,26 +174,18 @@ function SendToComPort(isRecurrence) {
 
     var prodLine = $("#productionLine").val();
     if (prodLine == '2') {
-        // Assembly line: Printer Model and Printer List validation
+        // Assembly line: Printer Model validation
         var printerModelValid = validatePrinterModel();
         if (!printerModelValid) {
             missingFields.push("Printer Model");
         }
-
-        var selectedPrinter = $("#prnter").val();
-        if (!selectedPrinter || selectedPrinter === "" || selectedPrinter === "No printer connected" || selectedPrinter === "Select Printer") {
-            $("#prnter").addClass("isValidate");
-            $("#printerStatusBadge").text("No printer connected").show();
-            missingFields.push("Printer (No printer connected)");
-        } else {
-            $("#prnter").removeClass("isValidate");
-        }
     } else {
-        // Card line: printer is not required
+        // Card line: printer model is not required
         $("#printerModel").removeClass("isValidate").addClass("validate");
-        $("#prnter").removeClass("isValidate");
         $("#printerStatusBadge").hide();
     }
+    // Printer is purely optional: testing is NEVER blocked if no printer is connected/selected
+    $("#prnter").removeClass("isValidate");
 
     var mandatoryValid = validateMandatoryFields();
 
@@ -232,6 +224,9 @@ function SendToComPort(isRecurrence) {
         $("#testResponse_1").empty();
         $("#Testresponse").empty();
         $("#printerStatusBadge").hide();
+        if (typeof initNewTestRunTelemetry === 'function') {
+            initNewTestRunTelemetry(infoValue.barCode || $("#sysNumber").val() || $("#sysNumberDup").val());
+        }
     }
     var scanId = currentScanId;
     $("#loadingbtn").show();
@@ -248,13 +243,16 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
     infoValue.isRecurrence = isRecurrence;
     infoValue.isRepeat = isRepeat;
 
-    infoValue.disProgNo = $("#display_pv").val()
+    infoValue.disProgNo = $("#display_pv").val();
 
-    $.ajax({
+    window.currentTestAjaxRequest = $.ajax({
         async: true,
         type: "POST",
         url: "/comport/SendParameter",
         data: infoValue,
+        complete: function () {
+            window.currentTestAjaxRequest = null;
+        },
         success: function (resp) {
             console.log(resp);
             isOk = resp ? resp.isOk : true;
@@ -263,6 +261,9 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
 
             if (resp && resp.message) {
                 $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+                if (typeof recordTestTelemetryError === 'function') {
+                    recordTestTelemetryError({ status: 500 }, resp.message);
+                }
                 if (typeof toastersetting === 'function') {
                     toastersetting(resp.message, "Error", "error", "#FF0000");
                 } else {
@@ -331,12 +332,19 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
                 })
                 $("#Testresponse").append(tbl);
                 $("#Testresponse").append(tr);
-            })
+            });
+
+            if (typeof recordTestTelemetryCycle === 'function') {
+                recordTestTelemetryCycle(resp);
+            }
         },
         error: function (xhr, status) {
             $("#checkbtn").show();
             $("#loadingbtn").hide();
             $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+            if (typeof recordTestTelemetryError === 'function') {
+                recordTestTelemetryError(xhr, status);
+            }
             var msg = "Request to the device failed (" + (xhr.status || status) + "). Please rescan.";
             if (typeof toastersetting === 'function') {
                 toastersetting(msg, "Error", "error", "#FF0000");
@@ -574,23 +582,72 @@ function validatePrinterModel() {
     return true;
 }
 
-function updatePrinterStatus() {
-    var prodLine = $("#productionLine").val();
-    if (prodLine == '2') {
-        // Assembly line: Printer is required
-        var val = $("#prnter").val();
-        if (!val || val === "" || val === "Select Printer" || val === "No printer connected") {
-            $("#printerStatusBadge").text("No printer connected").show();
-        } else {
-            $("#printerStatusBadge").hide();
-            $("#prnter").removeClass("isValidate");
-        }
-    } else {
-        // Card line (or non-assembly): Printer is not required
-        $("#printerStatusBadge").hide();
-        $("#prnter").removeClass("isValidate");
-        $("#printerModel").removeClass("isValidate");
+function applyPrinterStatusBadge(resp) {
+    var $badge = $("#printerStatusBadge");
+    $("#prnter").removeClass("isValidate");
+    if (!resp) {
+        $badge.hide();
+        return;
     }
+    if (resp.isConnected) {
+        $badge.removeClass("badge-danger badge-warning badge-secondary").addClass("badge-success")
+              .html('<i class="fas fa-check-circle mr-1"></i> ' + (resp.statusText || "Connected"))
+              .attr("title", resp.message || "Printer is ready.")
+              .show();
+    } else {
+        $badge.removeClass("badge-success badge-warning").addClass("badge-secondary")
+              .html('<i class="fas fa-print mr-1"></i> ' + (resp.statusText || "Print Disabled"))
+              .attr("title", resp.message || "No printer connected. Print command will not be invoked.")
+              .show();
+    }
+}
+
+function verifyPrinterConnection(callback) {
+    var prodLine = $("#productionLine").val();
+    $("#prnter").removeClass("isValidate");
+    if (prodLine != '2') {
+        $("#printerStatusBadge").hide();
+        window.printerStatusData = { isConnected: false };
+        if (callback) callback(false);
+        return;
+    }
+
+    var selectedPrinter = $("#prnter").val();
+    if (!selectedPrinter || selectedPrinter === "" || selectedPrinter === "No printer connected" || selectedPrinter === "Select Printer" || selectedPrinter === "Select") {
+        window.printerStatusData = { isConnected: false, statusText: "Print Disabled", message: "No printer selected. Print command will not be invoked." };
+        applyPrinterStatusBadge(window.printerStatusData);
+        if (callback) callback(false);
+        return;
+    }
+
+    var $badge = $("#printerStatusBadge");
+    $badge.removeClass("badge-success badge-danger badge-secondary").addClass("badge-warning")
+          .html('<i class="fas fa-spinner fa-spin mr-1"></i> Checking...')
+          .show();
+    $("#iconVerifyPrinter").addClass("fa-spin");
+
+    $.ajax({
+        type: "GET",
+        url: "/Home/CheckPrinterStatus",
+        data: { printerName: selectedPrinter },
+        cache: false,
+        success: function (resp) {
+            $("#iconVerifyPrinter").removeClass("fa-spin");
+            window.printerStatusData = resp;
+            applyPrinterStatusBadge(resp);
+            if (callback) callback(resp && resp.isConnected);
+        },
+        error: function () {
+            $("#iconVerifyPrinter").removeClass("fa-spin");
+            window.printerStatusData = { isConnected: false, statusText: "Offline", message: "Unable to verify printer. Print command will not be invoked." };
+            applyPrinterStatusBadge(window.printerStatusData);
+            if (callback) callback(false);
+        }
+    });
+}
+
+function updatePrinterStatus() {
+    verifyPrinterConnection();
 }
 
 function validateLine() {
@@ -635,3 +692,669 @@ function showPrinterNotice(message) {
         toastersetting(noticeText + ". Label printing skipped.", "Printer Notice", "warning", "#f0ad4e");
     }
 }
+
+// =========================================================================
+// Live Test Telemetry, Cycle Recording, Raw Console & Shift KPIs
+// =========================================================================
+var activeTestSession = {
+    runs: [],          // Completed runs in this browser session
+    currentRun: null,  // Currently active test run
+    totalPackets: 0
+};
+
+function initTelemetryPanel() {
+    $("#btnExportTestCSV, #btnExportTestData").off("click").on("click", function () {
+        showExportJsonModal();
+    });
+
+    $("#btnCopyJson").off("click").on("click", function () {
+        copyJsonExportToClipboard();
+    });
+
+    $("#btnDownloadJson").off("click").on("click", function () {
+        downloadJsonExportFile();
+    });
+
+    $("#btnDownloadCsvFromModal").off("click").on("click", function () {
+        exportTestCyclesToCSV();
+    });
+
+    $("#btnToggleWrapJson").off("click").on("click", function () {
+        var $pre = $("#jsonExportContent");
+        if ($pre.css("white-space") === "pre-wrap") {
+            $pre.css("white-space", "pre");
+        } else {
+            $pre.css("white-space", "pre-wrap");
+        }
+    });
+
+    $("#btnClearTelemetry").off("click").on("click", function () {
+        if (confirm("Are you sure you want to clear the telemetry log and active test cycles?")) {
+            clearTelemetryUI();
+        }
+    });
+
+    $("#btnCopyRawConsole").off("click").on("click", function () {
+        copyRawConsoleToClipboard();
+    });
+
+    $("#ddlCycleSelector").off("change").on("change", function () {
+        filterCyclesBySelector($(this).val());
+    });
+
+    $("#btnCloseTelemetryPanel").off("click").on("click", function () {
+        toggleTelemetryPanel(false);
+    });
+}
+
+function updateTelemetryToggleBtn(isVisible) {
+    if (isVisible) {
+        $("#iconToggleTelemetry").removeClass("fa-eye").addClass("fa-eye-slash");
+        $("#textToggleTelemetry").text("Hide Info");
+        $("#btnToggleTelemetry")
+            .removeClass("btn-info")
+            .addClass("btn-outline-info")
+            .attr("title", "Click to hide Info & Telemetry Panel");
+    } else {
+        $("#iconToggleTelemetry").removeClass("fa-eye-slash").addClass("fa-eye");
+        $("#textToggleTelemetry").text("Show Info");
+        $("#btnToggleTelemetry")
+            .removeClass("btn-outline-info")
+            .addClass("btn-info")
+            .attr("title", "Click to unhide Info & Telemetry Panel");
+    }
+}
+
+function toggleTelemetryPanel(forcedState) {
+    var $section = $("#telemetrySection");
+    var targetState = (forcedState !== undefined) ? forcedState : !$section.is(":visible");
+
+    if (targetState) {
+        $section.slideDown(200, function () {
+            updateTelemetryToggleBtn(true);
+            localStorage.setItem("telemetryPanelVisible", "true");
+        });
+        updateTelemetryToggleBtn(true);
+        localStorage.setItem("telemetryPanelVisible", "true");
+    } else {
+        $section.slideUp(200, function () {
+            updateTelemetryToggleBtn(false);
+            localStorage.setItem("telemetryPanelVisible", "false");
+        });
+        updateTelemetryToggleBtn(false);
+        localStorage.setItem("telemetryPanelVisible", "false");
+    }
+}
+
+function initTelemetryToggle() {
+    var stored = localStorage.getItem("telemetryPanelVisible");
+    var isVisible = (stored === null || stored === "true");
+
+    if (!isVisible) {
+        $("#telemetrySection").hide();
+        updateTelemetryToggleBtn(false);
+    } else {
+        $("#telemetrySection").show();
+        updateTelemetryToggleBtn(true);
+    }
+
+    $("#btnToggleTelemetry").off("click").on("click", function (e) {
+        e.preventDefault();
+        toggleTelemetryPanel();
+    });
+
+    $("#btnCloseTelemetryPanel").off("click").on("click", function (e) {
+        e.preventDefault();
+        toggleTelemetryPanel(false);
+    });
+}
+
+function clearTelemetryUI() {
+    activeTestSession.currentRun = null;
+    $("#cycleHistoryList").empty().append(
+        '<div class="text-center py-4 text-muted" id="emptyCyclePlaceholder">' +
+        '  <i class="fas fa-stream fa-2x mb-2 text-secondary"></i>' +
+        '  <p class="mb-0 font-weight-bold">Waiting for device test sequence to start...</p>' +
+        '  <small>Each telemetry frame received from start to PASS/FAIL will be recorded here for inspection.</small>' +
+        '</div>'
+    );
+    $("#badgeCycleCount").text("0 Cycles").removeClass("badge-success badge-danger").addClass("badge-info");
+    $("#testRunStatusIndicator").text("Standby").css({ "background-color": "#6c757d", "color": "#fff" });
+    $("#cycleSummaryText").html('<i class="fas fa-info-circle mr-1"></i> No test run recorded yet. Scan or enter a barcode to begin logging cycles.');
+    $("#btnExportTestCSV").prop("disabled", true);
+    $("#ddlCycleSelector").empty().append('<option value="ALL">All Cycles (Timeline)</option>');
+    $("#rawStreamConsole").html('[SYSTEM] Cleared. Diagnostic serial stream listener ready.\n');
+}
+
+function initNewTestRunTelemetry(barcode) {
+    var bCode = barcode || $("#sysNumber").val() || $("#sysNumberDup").val() || "UNKNOWN";
+    var model = $("#bCode").val() || ($("#printerModel option:selected").val() ? $("#printerModel option:selected").text() : "");
+    var port = $("#com_port").val() || "PORT";
+
+    activeTestSession.currentRun = {
+        barcode: bCode,
+        model: model,
+        port: port,
+        startTime: new Date(),
+        startTimestamp: Date.now(),
+        status: "TESTING",
+        cycles: []
+    };
+
+    $("#badgeCycleCount").text("0 Cycles").removeClass("badge-success badge-danger").addClass("badge-info");
+    $("#testRunStatusIndicator").text("TESTING...").css({ "background-color": "#ffc107", "color": "#000" });
+    $("#cycleSummaryText").html('<i class="fas fa-spinner fa-spin mr-1 text-primary"></i> Logging active test run for <strong>' + escapeHtmlText(bCode) + '</strong>...');
+    $("#btnExportTestCSV").prop("disabled", false);
+    $("#emptyCyclePlaceholder").hide();
+    $("#cycleHistoryList").empty();
+    $("#ddlCycleSelector").empty().append('<option value="ALL">All Cycles (Timeline)</option>');
+    $("#streamActivePort").text(port);
+
+    appendRawConsoleLine("[START] Test initialized | Barcode: " + bCode + " | Port: " + port + " | Time: " + new Date().toLocaleTimeString(), "text-info");
+}
+
+function recordTestTelemetryCycle(resp) {
+    if (!activeTestSession.currentRun) {
+        initNewTestRunTelemetry($("#sysNumber").val() || $("#sysNumberDup").val());
+    }
+
+    var run = activeTestSession.currentRun;
+    var cycleNum = run.cycles.length + 1;
+    var elapsedSec = ((Date.now() - run.startTimestamp) / 1000).toFixed(2);
+    activeTestSession.totalPackets++;
+
+    var cycleStatus = "TESTING";
+    var badgeClass = "badge-warning";
+    if (resp && (resp.status == 1 || resp.status === 'PASS')) {
+        cycleStatus = "PASS";
+        badgeClass = "badge-success";
+        run.status = "PASS";
+    } else if (resp && (resp.status == 2 || resp.status === 'FAIL')) {
+        cycleStatus = "FAIL";
+        badgeClass = "badge-danger";
+        run.status = "FAIL";
+    }
+
+    var cycle = {
+        cycleNumber: cycleNum,
+        timestamp: new Date().toLocaleTimeString(),
+        elapsedSec: elapsedSec,
+        status: cycleStatus,
+        rawData: (resp && resp.rawData) ? resp.rawData : "",
+        parameters: []
+    };
+
+    if (resp && resp.interType && resp.interType.length > 0) {
+        $.each(resp.interType, function (i, item) {
+            cycle.parameters.push({
+                sn: i + 1,
+                parameter: item.parameter || "",
+                display: item.dispaly || "",
+                actual: item.actual || "",
+                status: item.status || ""
+            });
+        });
+    }
+
+    run.cycles.push(cycle);
+
+    // Update Badges and Cycle Selector
+    $("#badgeCycleCount").text(run.cycles.length + " Cycles");
+    $("#badgeStreamPackets").text(activeTestSession.totalPackets + " Packets");
+    $("#ddlCycleSelector").append('<option value="' + cycleNum + '">Cycle #' + cycleNum + ' (' + cycleStatus + ' - ' + elapsedSec + 's)</option>');
+
+    // Render Cycle Card into DOM
+    renderCycleCard(cycle, run);
+
+    // Append to Raw Serial Stream Console
+    var rawText = cycle.rawData;
+    if (!rawText && cycle.parameters.length > 0) {
+        rawText = "@" + cycle.parameters.map(function (p) { return p.parameter + ":" + p.actual + ":" + p.status; }).join(",") + "^";
+    }
+    var consoleColor = cycleStatus === "PASS" ? "text-success" : (cycleStatus === "FAIL" ? "text-danger" : "text-light");
+    appendRawConsoleLine("[" + cycle.timestamp + "] [CYCLE #" + cycleNum + " (+" + elapsedSec + "s)] [" + cycleStatus + "] " + (rawText || "[Telemetry Frame]"), consoleColor);
+
+    // On completion (PASS / FAIL)
+    if (cycleStatus === "PASS" || cycleStatus === "FAIL") {
+        $("#testRunStatusIndicator").text(cycleStatus).css({
+            "background-color": cycleStatus === "PASS" ? "#28a745" : "#dc3545",
+            "color": "#fff"
+        });
+        $("#badgeCycleCount").removeClass("badge-info").addClass(cycleStatus === "PASS" ? "badge-success" : "badge-danger");
+        $("#cycleSummaryText").html('<i class="fas fa-check-circle mr-1 ' + (cycleStatus === "PASS" ? "text-success" : "text-danger") + '"></i> Test completed in <strong>' + elapsedSec + 's</strong> across <strong>' + run.cycles.length + ' cycles</strong> with result: <strong class="' + (cycleStatus === "PASS" ? "text-success" : "text-danger") + '">' + cycleStatus + '</strong>');
+
+        activeTestSession.runs.push(run);
+
+        appendRawConsoleLine("[END] Final Result: " + cycleStatus + " | Total Elapsed: " + elapsedSec + "s | Recorded Cycles: " + run.cycles.length, cycleStatus === "PASS" ? "text-success font-weight-bold" : "text-danger font-weight-bold");
+
+        // Refresh Shift KPIs
+        if (typeof loadShiftStats === 'function') {
+            loadShiftStats();
+        }
+    }
+}
+
+function recordTestTelemetryError(xhr, statusText) {
+    if (!activeTestSession.currentRun) return;
+    var run = activeTestSession.currentRun;
+    var elapsedSec = ((Date.now() - run.startTimestamp) / 1000).toFixed(2);
+    run.status = "ERROR";
+
+    $("#testRunStatusIndicator").text("ERROR").css({ "background-color": "#dc3545", "color": "#fff" });
+    $("#cycleSummaryText").html('<i class="fas fa-exclamation-circle text-danger mr-1"></i> Communication error at ' + elapsedSec + 's (' + (xhr.status || statusText) + ')');
+    appendRawConsoleLine("[" + new Date().toLocaleTimeString() + "] [ERROR] Serial communication failed (" + (xhr.status || statusText) + "). Test stopped.", "text-danger font-weight-bold");
+}
+
+function renderCycleCard(cycle, run) {
+    var badgeClass = cycle.status === "PASS" ? "badge-success" : (cycle.status === "FAIL" ? "badge-danger" : "badge-warning");
+    var collapseId = "cycleCollapse_" + cycle.cycleNumber;
+
+    var html = '<div class="cycle-card" id="cycleCard_' + cycle.cycleNumber + '">' +
+        '  <div class="cycle-card-header collapsed" data-toggle="collapse" data-target="#' + collapseId + '" aria-expanded="false" style="cursor: pointer;">' +
+        '    <div class="d-flex align-items-center">' +
+        '      <span class="badge badge-secondary mr-2" style="font-size: 0.82rem;">#' + cycle.cycleNumber + '</span>' +
+        '      <strong class="mr-3" style="font-size: 0.9rem;">Cycle ' + cycle.cycleNumber + '</strong>' +
+        '      <span class="text-muted small mr-3"><i class="far fa-clock mr-1"></i>' + cycle.timestamp + ' (+' + cycle.elapsedSec + 's)</span>' +
+        '      <span class="text-muted small mr-3"><i class="fas fa-list-ol mr-1"></i>' + cycle.parameters.length + ' Parameters</span>' +
+        '    </div>' +
+        '    <div class="d-flex align-items-center">' +
+        '      <span class="badge ' + badgeClass + ' mr-2 px-2 py-1">' + cycle.status + '</span>' +
+        '      <i class="fas fa-chevron-down text-muted small cycle-chevron"></i>' +
+        '    </div>' +
+        '  </div>' +
+        '  <div id="' + collapseId + '" class="collapse cycle-collapse-body">' +
+        '    <div class="cycle-card-body">';
+
+    if (cycle.rawData) {
+        html += '<div class="mb-2 p-1 bg-light border rounded small font-italic text-break" style="font-family: Consolas, monospace; font-size: 11px;">' +
+            '<strong>Raw Packet:</strong> ' + escapeHtmlText(cycle.rawData) +
+            '</div>';
+    }
+
+    if (cycle.parameters.length > 0) {
+        html += '<div class="table-responsive">' +
+            '<table class="table table-bordered table-sm cycle-param-table">' +
+            '  <thead class="thead-light">' +
+            '    <tr><th style="width: 40px">Sn.</th><th>Parameter</th><th style="width: 120px">Display</th><th style="width: 120px">Actual</th><th style="width: 100px">Status</th></tr>' +
+            '  </thead>' +
+            '  <tbody>';
+
+        $.each(cycle.parameters, function (pIdx, param) {
+            var rowBg = "white";
+            var statusColor = "#495057";
+            if (param.status === 'FAIL' || param.status === 'FAULT') {
+                rowBg = "#f8d7da";
+                statusColor = "#721c24";
+            } else if (param.status === 'PASS' || param.status === 'OK') {
+                rowBg = "#d4edda";
+                statusColor = "#155724";
+            }
+
+            html += '<tr style="background-color: ' + rowBg + ';">' +
+                '  <td>' + param.sn + '</td>' +
+                '  <td style="text-align: left; font-weight: 600;">' + escapeHtmlText(param.parameter) + '</td>' +
+                '  <td>' + escapeHtmlText(param.display) + '</td>' +
+                '  <td>' + escapeHtmlText(param.actual) + '</td>' +
+                '  <td style="font-weight: 700; color: ' + statusColor + ';">' + escapeHtmlText(param.status) + '</td>' +
+                '</tr>';
+        });
+
+        html += '  </tbody>' +
+            '</table>' +
+            '</div>';
+    }
+
+    html += '    </div>' +
+        '  </div>' +
+        '</div>';
+
+    $("#cycleHistoryList").append(html);
+
+    var cycleListElem = document.getElementById("cycleHistoryList");
+    if (cycleListElem) {
+        cycleListElem.scrollTop = cycleListElem.scrollHeight;
+    }
+}
+
+function filterCyclesBySelector(selectedValue) {
+    if (selectedValue === "ALL") {
+        $(".cycle-card").show();
+    } else {
+        $(".cycle-card").hide();
+        var $targetCard = $("#cycleCard_" + selectedValue);
+        $targetCard.show();
+        $targetCard.find(".cycle-collapse-body").collapse("show");
+    }
+}
+
+function appendRawConsoleLine(text, cssClass) {
+    var $console = $("#rawStreamConsole");
+    if ($console.length === 0) return;
+    var lineHtml = '<div class="raw-log-line ' + (cssClass || "text-light") + '">' + escapeHtmlText(text) + '</div>';
+    $console.append(lineHtml);
+
+    if ($("#chkAutoScroll").is(":checked")) {
+        $console.scrollTop($console[0].scrollHeight);
+    }
+}
+
+function copyRawConsoleToClipboard() {
+    var text = $("#rawStreamConsole").text();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+            alert("Raw console log copied to clipboard.");
+        });
+    } else {
+        var $temp = $("<textarea>");
+        $("body").append($temp);
+        $temp.val(text).select();
+        document.execCommand("copy");
+        $temp.remove();
+        alert("Raw console log copied to clipboard.");
+    }
+}
+
+function escapeHtmlText(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function escapeCsvField(val) {
+    if (val === null || val === undefined) return '""';
+    var stringVal = String(val).replace(/"/g, '""');
+    return '"' + stringVal + '"';
+}
+
+function showExportJsonModal() {
+    var run = activeTestSession.currentRun;
+    if (!run || !run.cycles || run.cycles.length === 0) {
+        if (typeof toastersetting === 'function') {
+            toastersetting("No test cycle data available to export.", "Notice", "warning", "#f0ad4e");
+        } else {
+            alert("No test cycle data available to export.");
+        }
+        return;
+    }
+
+    var exportPayload = {
+        exportTimestamp: new Date().toISOString(),
+        testSession: {
+            barcode: run.barcode || "UNKNOWN",
+            model: run.model || "",
+            port: run.port || "",
+            startTime: run.startTime ? new Date(run.startTime).toISOString() : null,
+            status: run.status || "UNKNOWN",
+            totalCycles: run.cycles.length,
+            totalPacketsRecorded: activeTestSession.totalPackets
+        },
+        cycles: run.cycles.map(function (c) {
+            return {
+                cycleNumber: c.cycleNumber,
+                timestamp: c.timestamp,
+                elapsedSec: parseFloat(c.elapsedSec) || 0,
+                status: c.status,
+                rawData: c.rawData || "",
+                parameters: (c.parameters || []).map(function (p) {
+                    return {
+                        sn: p.sn,
+                        parameter: p.parameter,
+                        display: p.display,
+                        actual: p.actual,
+                        status: p.status
+                    };
+                })
+            };
+        })
+    };
+
+    var jsonString = JSON.stringify(exportPayload, null, 2);
+
+    $("#jsonExportMeta").html(
+        '<strong>Barcode:</strong> ' + escapeHtmlText(run.barcode) + ' &nbsp;|&nbsp; ' +
+        '<strong>Cycles:</strong> ' + run.cycles.length + ' &nbsp;|&nbsp; ' +
+        '<strong>Result:</strong> <span class="' + (run.status === "PASS" ? "text-success font-weight-bold" : "text-danger font-weight-bold") + '">' + run.status + '</span>'
+    );
+
+    $("#jsonExportContent").text(jsonString);
+
+    $("#btnCopyJsonText").text("Copy JSON");
+    $("#btnCopyJson").removeClass("btn-success").addClass("btn-outline-info");
+
+    $("#modalExportJson").modal("show");
+}
+
+function copyJsonExportToClipboard() {
+    var text = $("#jsonExportContent").text();
+    if (!text) return;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function () {
+            onJsonCopiedSuccess();
+        }).catch(function () {
+            fallbackCopyText(text);
+        });
+    } else {
+        fallbackCopyText(text);
+    }
+}
+
+function fallbackCopyText(text) {
+    var $temp = $("<textarea>");
+    $("body").append($temp);
+    $temp.val(text).select();
+    document.execCommand("copy");
+    $temp.remove();
+    onJsonCopiedSuccess();
+}
+
+function onJsonCopiedSuccess() {
+    $("#btnCopyJsonText").text("Copied!");
+    $("#btnCopyJson").removeClass("btn-outline-info").addClass("btn-success");
+    setTimeout(function () {
+        $("#btnCopyJsonText").text("Copy JSON");
+        $("#btnCopyJson").removeClass("btn-success").addClass("btn-outline-info");
+    }, 2000);
+}
+
+function downloadJsonExportFile() {
+    var run = activeTestSession.currentRun;
+    var jsonText = $("#jsonExportContent").text();
+    if (!jsonText) return;
+
+    var blob = new Blob([jsonText], { type: "application/json;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var downloadLink = document.createElement("a");
+    var cleanBarcode = ((run && run.barcode) || "Unit").replace(/[^a-zA-Z0-9_-]/g, "_");
+    var timestampStr = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    downloadLink.href = url;
+    downloadLink.download = "TestData_" + cleanBarcode + "_" + timestampStr + "_" + ((run && run.status) || "RUN") + ".json";
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+}
+
+function exportTestCyclesToCSV() {
+    var run = activeTestSession.currentRun;
+    if (!run || !run.cycles || run.cycles.length === 0) {
+        alert("No test cycle data available to export.");
+        return;
+    }
+
+    var csvRows = [];
+    csvRows.push([
+        "Barcode",
+        "Model",
+        "Cycle #",
+        "Timestamp",
+        "Elapsed (s)",
+        "Cycle Status",
+        "Parameter Sn",
+        "Parameter Name",
+        "Display Value",
+        "Actual Value",
+        "Parameter Status",
+        "Raw Serial Packet"
+    ].map(escapeCsvField).join(","));
+
+    $.each(run.cycles, function (cIdx, cycle) {
+        if (cycle.parameters && cycle.parameters.length > 0) {
+            $.each(cycle.parameters, function (pIdx, param) {
+                csvRows.push([
+                    run.barcode,
+                    run.model,
+                    cycle.cycleNumber,
+                    cycle.timestamp,
+                    cycle.elapsedSec,
+                    cycle.status,
+                    param.sn,
+                    param.parameter,
+                    param.display,
+                    param.actual,
+                    param.status,
+                    pIdx === 0 ? cycle.rawData : ""
+                ].map(escapeCsvField).join(","));
+            });
+        } else {
+            csvRows.push([
+                run.barcode,
+                run.model,
+                cycle.cycleNumber,
+                cycle.timestamp,
+                cycle.elapsedSec,
+                cycle.status,
+                "", "", "", "", "",
+                cycle.rawData
+            ].map(escapeCsvField).join(","));
+        }
+    });
+
+    var csvContent = "\uFEFF" + csvRows.join("\r\n");
+    var blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var downloadLink = document.createElement("a");
+    var cleanBarcode = (run.barcode || "Unit").replace(/[^a-zA-Z0-9_-]/g, "_");
+    var timestampStr = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    downloadLink.href = url;
+    downloadLink.download = "TestData_" + cleanBarcode + "_" + timestampStr + "_" + run.status + ".csv";
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+}
+
+function loadShiftStats() {
+    var lineVal = $("#ddlLine").length > 0 ? $("#ddlLine").val() : "";
+    var url = "/Home/GetShiftStats";
+    if (lineVal && lineVal !== "" && lineVal !== "0" && lineVal !== "__ADD_NEW__") {
+        url += "?line=" + encodeURIComponent(lineVal);
+    }
+
+    $.ajax({
+        type: "GET",
+        url: url,
+        cache: false,
+        success: function (resp) {
+            if (resp && resp.success) {
+                $("#kpiShiftTotal").text(resp.total);
+                $("#kpiPassedUnits").text(resp.passed);
+                $("#kpiFailedUnits").text(resp.failed);
+                $("#kpiYieldRate").text(resp.yieldRate + "%");
+
+                var $bar = $("#kpiYieldBar");
+                $bar.css("width", Math.min(100, Math.max(0, resp.yieldRate)) + "%");
+                if (resp.yieldRate >= 95) {
+                    $bar.removeClass("bg-warning bg-danger").addClass("bg-success");
+                } else if (resp.yieldRate >= 85) {
+                    $bar.removeClass("bg-success bg-danger").addClass("bg-warning");
+                } else {
+                    $bar.removeClass("bg-success bg-warning").addClass("bg-danger");
+                }
+            }
+        },
+        error: function () {
+            // graceful ignore
+        }
+    });
+}
+
+function reloadComPorts(callback) {
+    var $icon = $("#iconRefreshPorts");
+    $icon.addClass("fa-spin");
+
+    $.ajax({
+        type: "GET",
+        url: "/Home/GetComPorts",
+        cache: false,
+        success: function (resp) {
+            $icon.removeClass("fa-spin");
+            if (resp && resp.success && resp.ports) {
+                var $select = $("#com_port");
+                var previousVal = $select.val() || localStorage.getItem("port");
+                $select.empty();
+                $select.append('<option value="">Select</option>');
+                var foundPrev = false;
+                $.each(resp.ports, function (i, p) {
+                    var isSelected = (p.Key === previousVal);
+                    if (isSelected) foundPrev = true;
+                    $select.append('<option value="' + p.Key + '"' + (isSelected ? ' selected' : '') + '>' + p.Value + '</option>');
+                });
+                if (!foundPrev && resp.ports.length === 1 && resp.ports[0].Key !== "SIMULATOR") {
+                    $select.val(resp.ports[0].Key);
+                }
+                if (typeof toastersetting === 'function') {
+                    toastersetting("COM ports refreshed (" + resp.ports.length + " found)", "Ports Updated", "success", "#28a745");
+                }
+                if (callback) callback(true);
+            }
+        },
+        error: function () {
+            $icon.removeClass("fa-spin");
+            if (callback) callback(false);
+        }
+    });
+}
+
+// Expose functions globally on window for interop and debugging
+window.activeTestSession = activeTestSession;
+window.initTelemetryPanel = initTelemetryPanel;
+window.initTelemetryToggle = initTelemetryToggle;
+window.toggleTelemetryPanel = toggleTelemetryPanel;
+window.initNewTestRunTelemetry = initNewTestRunTelemetry;
+window.recordTestTelemetryCycle = recordTestTelemetryCycle;
+window.recordTestTelemetryError = recordTestTelemetryError;
+window.showExportJsonModal = showExportJsonModal;
+window.copyJsonExportToClipboard = copyJsonExportToClipboard;
+window.downloadJsonExportFile = downloadJsonExportFile;
+window.exportTestCyclesToCSV = exportTestCyclesToCSV;
+window.loadShiftStats = loadShiftStats;
+window.verifyPrinterConnection = verifyPrinterConnection;
+window.applyPrinterStatusBadge = applyPrinterStatusBadge;
+window.updatePrinterStatus = updatePrinterStatus;
+window.reloadComPorts = reloadComPorts;
+
+$(window).on("beforeunload", function () {
+    if (window.currentTestAjaxRequest && typeof window.currentTestAjaxRequest.abort === 'function') {
+        window.currentTestAjaxRequest.abort();
+    }
+});
+
+$(document).ready(function () {
+    initTelemetryToggle();
+    if ($("#badgeCycleCount").length > 0) {
+        initTelemetryPanel();
+        loadShiftStats();
+    }
+    $("#ddlLine").on("change", function () {
+        loadShiftStats();
+    });
+    $(document).on("click", "#btnRefreshPorts", function (e) {
+        e.preventDefault();
+        reloadComPorts();
+    });
+});

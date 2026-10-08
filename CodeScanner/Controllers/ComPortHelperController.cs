@@ -10,6 +10,7 @@ using System.Drawing.Printing;
 using System.Drawing.Text;
 using System.IO.Ports;
 using System.Linq;
+using System.Management;
 using System.Web.Mvc;
 using Utility;
 using ZXing;
@@ -455,62 +456,189 @@ namespace CodeScanner.Controllers
             return bitmap;
         }
 
-        public bool IsPhysicalPrinterAvailable(string targetPrinterName = null)
+        public class PrinterConnectionStatus
         {
+            public bool isConnected { get; set; }
+            public bool isOnline { get; set; }
+            public bool isInstalled { get; set; }
+            public bool isVirtual { get; set; }
+            public string printerName { get; set; }
+            public string portName { get; set; }
+            public string statusText { get; set; }
+            public string message { get; set; }
+        }
+
+        public static PrinterConnectionStatus VerifyPrinterConnection(string targetPrinterName)
+        {
+            var status = new PrinterConnectionStatus
+            {
+                printerName = targetPrinterName ?? string.Empty,
+                isConnected = false,
+                isOnline = false,
+                isInstalled = false,
+                isVirtual = false,
+                statusText = "Disconnected",
+                message = "No printer specified."
+            };
+
+            if (string.IsNullOrWhiteSpace(targetPrinterName) ||
+                string.Equals(targetPrinterName, "No printer connected", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(targetPrinterName, "Select Printer", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(targetPrinterName, "Select", StringComparison.OrdinalIgnoreCase))
+            {
+                status.statusText = "No Printer Selected";
+                status.message = "Please select a printer from the dropdown.";
+                return status;
+            }
+
+#if DEBUG
+            if (string.Equals(targetPrinterName, "SIMULATOR_PRINTER", StringComparison.OrdinalIgnoreCase))
+            {
+                status.isConnected = true;
+                status.isOnline = true;
+                status.isInstalled = true;
+                status.portName = "VIRTUAL_LPT";
+                status.statusText = "Virtual Label Printer (Ready)";
+                status.message = "Virtual printer simulator connected.";
+                return status;
+            }
+#endif
+
+            if (IsVirtualPromptPrinter(targetPrinterName))
+            {
+                status.isVirtual = true;
+                status.statusText = "Virtual Printer (Invalid)";
+                status.message = $"'{targetPrinterName}' is a virtual file-prompt printer (PDF/XPS/Fax). A physical barcode label printer is required.";
+                return status;
+            }
+
+            bool isInstalled = false;
+            foreach (string installed in PrinterSettings.InstalledPrinters)
+            {
+                if (string.Equals(installed, targetPrinterName.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    isInstalled = true;
+                    break;
+                }
+            }
+
+            status.isInstalled = isInstalled;
+            if (!isInstalled)
+            {
+                status.statusText = "Not Installed";
+                status.message = $"Printer '{targetPrinterName}' is not installed in Windows.";
+                return status;
+            }
+
+            // Verify physical connection and online status via Windows Management (WMI Win32_Printer)
             try
             {
-                if (PrinterSettings.InstalledPrinters.Count == 0)
+                string escapedName = targetPrinterName.Replace("'", "''");
+                using (var searcher = new ManagementObjectSearcher(
+                    $"SELECT Name, WorkOffline, PrinterStatus, ExtendedPrinterStatus, PrinterState, PortName, DetectedErrorState FROM Win32_Printer WHERE Name = '{escapedName}'"))
                 {
-                    return false;
-                }
-
-                // If a specific printer was requested
-                if (!string.IsNullOrWhiteSpace(targetPrinterName))
-                {
-                    bool exists = false;
-                    foreach (string installed in PrinterSettings.InstalledPrinters)
+                    ManagementObjectCollection coll = searcher.Get();
+                    if (coll.Count == 0)
                     {
-                        if (string.Equals(installed, targetPrinterName.Trim(), StringComparison.OrdinalIgnoreCase))
+                        status.statusText = "Not Found";
+                        status.message = $"Printer '{targetPrinterName}' was not found in Windows spooler.";
+                        return status;
+                    }
+
+                    foreach (ManagementObject mo in coll)
+                    {
+                        bool workOffline = mo["WorkOffline"] != null && (bool)mo["WorkOffline"];
+                        int printerStatus = mo["PrinterStatus"] != null ? Convert.ToInt32(mo["PrinterStatus"]) : 0;
+                        int extendedStatus = mo["ExtendedPrinterStatus"] != null ? Convert.ToInt32(mo["ExtendedPrinterStatus"]) : 0;
+                        int printerState = mo["PrinterState"] != null ? Convert.ToInt32(mo["PrinterState"]) : 0;
+                        string portName = mo["PortName"] != null ? mo["PortName"].ToString() : "";
+                        status.portName = portName;
+
+                        // 7 = Offline in PrinterStatus / ExtendedPrinterStatus
+                        // 0x00000080 (128)  = PRINTER_STATUS_OFFLINE
+                        // 0x00001000 (4096) = PRINTER_STATUS_NOT_AVAILABLE
+                        // 0x00000002 (2)    = PRINTER_STATUS_ERROR
+                        bool isOffline = workOffline || printerStatus == 7 || extendedStatus == 7 ||
+                                         (printerState & 0x80) != 0 || (printerState & 0x1000) != 0;
+
+                        bool hasHardwareError = (printerState & 0x2) != 0;
+
+                        if (isOffline)
                         {
-                            exists = true;
-                            break;
+                            status.isConnected = false;
+                            status.isOnline = false;
+                            status.statusText = "Offline / Disconnected";
+                            status.message = $"Printer '{targetPrinterName}' is offline or disconnected. Please connect the USB/Network cable and turn power on.";
+                            return status;
                         }
+
+                        if (hasHardwareError)
+                        {
+                            status.isConnected = false;
+                            status.isOnline = false;
+                            status.statusText = "Printer Hardware Error";
+                            status.message = $"Printer '{targetPrinterName}' reported a hardware error (paper out, ribbon out, or head open).";
+                            return status;
+                        }
+
+                        // If port is USB (e.g. USB001, USB002), verify USB PnP device presence
+                        if (!string.IsNullOrWhiteSpace(portName) && portName.StartsWith("USB", StringComparison.OrdinalIgnoreCase))
+                        {
+                            bool usbPresent = false;
+                            try
+                            {
+                                using (var pnpSearcher = new ManagementObjectSearcher("SELECT Status, Present FROM Win32_PnPEntity WHERE Service = 'usbprint' OR PNPClass = 'Printer'"))
+                                {
+                                    foreach (ManagementObject pnp in pnpSearcher.Get())
+                                    {
+                                        string pnpStatus = pnp["Status"] != null ? pnp["Status"].ToString() : "";
+                                        bool present = pnp["Present"] == null || (bool)pnp["Present"];
+                                        if (present && string.Equals(pnpStatus, "OK", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            usbPresent = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                usbPresent = true; // Fallback if PnP query is unavailable
+                            }
+
+                            if (!usbPresent)
+                            {
+                                status.isConnected = false;
+                                status.isOnline = false;
+                                status.statusText = "USB Unplugged";
+                                status.message = $"Printer '{targetPrinterName}' is configured on '{portName}', but no USB printer hardware is currently connected.";
+                                return status;
+                            }
+                        }
+
+                        status.isConnected = true;
+                        status.isOnline = true;
+                        status.statusText = "Connected & Ready";
+                        status.message = $"Printer '{targetPrinterName}' is connected properly and ready.";
+                        return status;
                     }
-
-                    if (!exists || IsVirtualPromptPrinter(targetPrinterName))
-                    {
-                        return false;
-                    }
-
-                    PrinterSettings ps = new PrinterSettings { PrinterName = targetPrinterName.Trim() };
-                    return ps.IsValid;
                 }
-
-                // If no specific printer passed, check default printer
-                PrinterSettings defaultSettings = new PrinterSettings();
-                string defaultName = defaultSettings.PrinterName;
-
-                if (!string.IsNullOrWhiteSpace(defaultName) && !IsVirtualPromptPrinter(defaultName) && defaultSettings.IsValid)
-                {
-                    return true;
-                }
-
-                // Check if ANY physical non-virtual installed printer exists
-                foreach (string installed in PrinterSettings.InstalledPrinters)
-                {
-                    if (!IsVirtualPromptPrinter(installed))
-                    {
-                        PrinterSettings ps = new PrinterSettings { PrinterName = installed };
-                        if (ps.IsValid) return true;
-                    }
-                }
-
-                return false;
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                Log.Error("VerifyPrinterConnection error: " + ex);
+                status.statusText = "Check Error";
+                status.message = "Could not verify printer connection: " + ex.Message;
+                return status;
             }
+
+            return status;
+        }
+
+        public bool IsPhysicalPrinterAvailable(string targetPrinterName = null)
+        {
+            var res = VerifyPrinterConnection(targetPrinterName);
+            return res.isConnected;
         }
 
         public static bool IsVirtualPromptPrinter(string printerName)

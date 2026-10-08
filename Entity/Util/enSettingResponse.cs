@@ -22,6 +22,7 @@ namespace Entity.Util
         public string printerStatus { get; set; }
         public List<List<string>> totalString { get; set; }
         public List<enSettingInfo> SettingInfoList { get; set; }
+        public string rawData { get; set; }
     }
 
     public class IntegerType
