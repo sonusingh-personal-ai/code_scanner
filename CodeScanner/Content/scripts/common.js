@@ -161,6 +161,148 @@ function validateProductionLine() {
     return true;
 }
 
+// =========================================================================
+// Celebration & Status Feedback (Emojis, Confetti, Animations)
+// =========================================================================
+var celebrationTimer = null;
+
+function clearCelebrationFeedback() {
+    if (celebrationTimer) {
+        clearTimeout(celebrationTimer);
+        celebrationTimer = null;
+    }
+    $("#testCelebrationOverlay").remove();
+}
+
+function triggerCelebrationFeedback(isPass, statusText) {
+    clearCelebrationFeedback();
+
+    var passEmojis = ['🎉', '🥳', '✨', '🎊', '🏆', '⭐', '🎈', '👏', '🚀'];
+    var failEmojis = ['❌', '⚠️', '🚨', '⚡', '🛑', '💥'];
+    var emojiList = isPass ? passEmojis : failEmojis;
+
+    var pillText = isPass ? '🎉 TEST PASSED! 🥳✨' : '❌ TEST FAILED! ⚠️🚨';
+    var pillClass = isPass ? 'celebration-pill-pass' : 'celebration-pill-fail';
+
+    var $overlay = $('<div id="testCelebrationOverlay" class="celebration-overlay-container"></div>');
+    var $pill = $('<div class="celebration-pill ' + pillClass + '"><span>' + pillText + '</span></div>');
+    $overlay.append($pill);
+
+    // Generate floating emoji particles
+    var particleCount = isPass ? 26 : 18;
+    for (var i = 0; i < particleCount; i++) {
+        var emoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+        var left = Math.floor(Math.random() * 90) + 5; // 5% to 95% across screen
+        var startY = Math.floor(Math.random() * 20) + 40; // 40% to 60% viewport height
+        var fontSize = Math.floor(Math.random() * 16) + 24; // 24px to 40px
+        var duration = (Math.random() * 0.7 + 1.5).toFixed(2); // 1.5s to 2.2s
+        var delay = (Math.random() * 0.25).toFixed(2); // 0s to 0.25s
+        var tx = Math.floor((Math.random() - 0.5) * 220); // -110px to +110px
+        var ty = -Math.floor(Math.random() * 240 + 120); // -120px to -360px float upwards
+        var rot = Math.floor((Math.random() - 0.5) * 90); // -45deg to +45deg
+
+        var $particle = $('<span class="celebration-emoji-particle">' + emoji + '</span>');
+        $particle.css({
+            'left': left + '%',
+            'top': startY + '%',
+            'font-size': fontSize + 'px',
+            'animation-duration': duration + 's',
+            'animation-delay': delay + 's',
+            '--tx': tx + 'px',
+            '--ty': ty + 'px',
+            '--rot': rot + 'deg'
+        });
+        $overlay.append($particle);
+    }
+
+    $('body').append($overlay);
+
+    celebrationTimer = setTimeout(function () {
+        clearCelebrationFeedback();
+    }, 2800);
+}
+
+function updateStatusDisplay(status, extraText) {
+    var $status = $("#info_status");
+    if ($status.length === 0) return;
+
+    $status.removeClass("status-anim-pass status-anim-fail status-anim-testing");
+    if ($status[0]) {
+        void $status[0].offsetWidth; // trigger reflow for smooth re-animation
+    }
+
+    if (status === "PASS" || status === 1) {
+        var label = extraText ? ("🎉 PASS (" + extraText + ") 🥳") : "🎉 PASS 🥳";
+        $status.val(label)
+               .css({
+                   "background-color": "#28a745",
+                   "color": "#ffffff",
+                   "font-weight": "800",
+                   "text-align": "center",
+                   "box-shadow": "0 0 12px rgba(40, 167, 69, 0.6)"
+               })
+               .addClass("status-anim-pass");
+        triggerCelebrationFeedback(true, "PASS");
+    } else if (status === "FAIL" || status === 2) {
+        var failLabel = extraText ? ("❌ FAIL (" + extraText + ") ⚠️") : "❌ FAIL ⚠️";
+        $status.val(failLabel)
+               .css({
+                   "background-color": "#dc3545",
+                   "color": "#ffffff",
+                   "font-weight": "800",
+                   "text-align": "center",
+                   "box-shadow": "0 0 12px rgba(220, 53, 69, 0.6)"
+               })
+               .addClass("status-anim-fail");
+        triggerCelebrationFeedback(false, "FAIL");
+    } else if (status === "TESTING") {
+        $status.val("⏳ TESTING...")
+               .css({
+                   "background-color": "#ffc107",
+                   "color": "#000000",
+                   "font-weight": "800",
+                   "text-align": "center",
+                   "box-shadow": "none"
+               })
+               .addClass("status-anim-testing");
+        clearCelebrationFeedback();
+    } else if (status === "Ready" || status === "Enable") {
+        $status.val(status)
+               .css({
+                   "background-color": "#81c57b",
+                   "color": "#000000",
+                   "font-weight": "bold",
+                   "text-align": "center",
+                   "box-shadow": "none"
+               });
+        clearCelebrationFeedback();
+    } else if (status === "Disable") {
+        $status.val("Disable")
+               .css({
+                   "background-color": "#dc3545",
+                   "color": "#ffffff",
+                   "font-weight": "bold",
+                   "text-align": "center",
+                   "box-shadow": "none"
+               });
+        clearCelebrationFeedback();
+    } else {
+        $status.val(status || "")
+               .css({
+                   "background-color": "#e9ecef",
+                   "color": "#495057",
+                   "font-weight": "normal",
+                   "text-align": "center",
+                   "box-shadow": "none"
+               });
+        clearCelebrationFeedback();
+    }
+}
+
+window.clearCelebrationFeedback = clearCelebrationFeedback;
+window.triggerCelebrationFeedback = triggerCelebrationFeedback;
+window.updateStatusDisplay = updateStatusDisplay;
+
 function SendToComPort(isRecurrence) {
     getInfoValue();
 
@@ -219,9 +361,8 @@ function SendToComPort(isRecurrence) {
     if (!isRecurrence) {
         currentScanId++;
         // Immediately reset Status badge and clear previous output tables
-        $("#info_status").val("TESTING...").css({ "background-color": "#ffc107", "color": "#000", "font-weight": "bold" });
-        $("#testResponse_0").empty();
-        $("#testResponse_1").empty();
+        updateStatusDisplay("TESTING");
+        clearInspectionDataTables();
         $("#Testresponse").empty();
         $("#printerStatusBadge").hide();
         if (typeof initNewTestRunTelemetry === 'function') {
@@ -260,7 +401,7 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             $("#loadingbtn").hide();
 
             if (resp && resp.message) {
-                $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+                updateStatusDisplay("FAIL");
                 if (typeof recordTestTelemetryError === 'function') {
                     recordTestTelemetryError({ status: 500 }, resp.message);
                 }
@@ -274,7 +415,7 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             }
 
             if (!isOk) {
-                $("#info_status").val("TESTING...").css({ "background-color": "#ffc107", "color": "#000", "font-weight": "bold" });
+                updateStatusDisplay("TESTING");
                 setTimeout(function () { SendToComPort(true) }, 50);
             }
 
@@ -282,37 +423,21 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
             $("#sysRating").val(resp.sysRating);
             $("#bCode").val(resp.model);
 
-            // Update UI status field (#info_status) matching output table colors
+            // Update UI status field (#info_status) with celebratory / alert emojis and animations
             if (resp.status == 1 || resp.status === 'PASS') {
                 if (resp.printerStatus) {
-                    $("#info_status").val("PASS (" + resp.printerStatus + ")").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                    updateStatusDisplay("PASS", resp.printerStatus);
                     showPrinterNotice(resp.printerStatus);
                 } else {
-                    $("#info_status").val("PASS").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                    updateStatusDisplay("PASS");
                     $("#printerStatusBadge").hide();
                 }
             } else if (resp.status == 2 || resp.status === 'FAIL') {
-                $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+                updateStatusDisplay("FAIL");
             }
 
-            $("#testResponse_0").empty();
-            $("#testResponse_1").empty();
-
-            $.each(resp.interType, function (i, v) {
-                var color = "white";
-                if (v.status == 'FAIL' || v.status == 'FAULT') {
-                    color = "#F72F35"; // Soft light red
-                } else if (v.status == 'PASS' || v.status == 'OK') {
-                    color = "#81c57b"//light green
-                }
-                if ((i + 1) % 2 === 0) {
-                    var tr = '<tr style="background:' + color + '"><td style="width:10%">' + (i + 1) + '</td> <td style="width:50%;font-weight: 700;"> ' + v.parameter + ' </td> <td style="font-weight: 700;"> ' + v.dispaly + ' </td> <td style="font-weight: 700;"> ' + v.actual + ' </td> <td style="font-weight: 700;"> ' + v.status + ' </td></tr>'
-                    $("#testResponse_1").append(tr);
-                } else {
-                    var tr = '<tr style="background:' + color + '"><td style="width:10%">' + (i + 1) + '</td> <td style="width:50%;font-weight: 700;"> ' + v.parameter + ' </td> <td style="font-weight: 700;"> ' + v.dispaly + ' </td> <td style="font-weight: 700;"> ' + v.actual + ' </td> <td style="font-weight: 700;"> ' + v.status + ' </td></tr>'
-                    $("#testResponse_0").append(tr);
-                }
-            })
+            // Populate and render modern DataTables with badges and status tinting
+            renderInspectionDataTables(resp);
 
             var tbl = '';
             var tr = '';
@@ -341,7 +466,7 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
         error: function (xhr, status) {
             $("#checkbtn").show();
             $("#loadingbtn").hide();
-            $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+            updateStatusDisplay("FAIL");
             if (typeof recordTestTelemetryError === 'function') {
                 recordTestTelemetryError(xhr, status);
             }
@@ -387,9 +512,9 @@ function checkBarcode(barcode, port, baudRate, visualby, testedBy, productionLin
                         $("#loadingbtn").hide();
                         var portVal = $("#com_port").val();
                         if (portVal && portVal.length > 0) {
-                            $("#info_status").val("Enable").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                            updateStatusDisplay("Enable");
                         } else {
-                            $("#info_status").val("Ready").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+                            updateStatusDisplay("Ready");
                         }
                     }
                 } else {
@@ -398,7 +523,7 @@ function checkBarcode(barcode, port, baudRate, visualby, testedBy, productionLin
             },
             error: function (xhr, status) {
                 $("#loadingbtn").hide();
-                $("#info_status").val("FAIL").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+                updateStatusDisplay("FAIL");
             }
         })
     } else {
@@ -750,18 +875,16 @@ function initTelemetryPanel() {
 function updateTelemetryToggleBtn(isVisible) {
     if (isVisible) {
         $("#iconToggleTelemetry").removeClass("fa-eye").addClass("fa-eye-slash");
-        $("#textToggleTelemetry").text("Hide Info");
         $("#btnToggleTelemetry")
             .removeClass("btn-info")
             .addClass("btn-outline-info")
-            .attr("title", "Click to hide Info & Telemetry Panel");
+            .attr("title", "Hide Info & Telemetry Panel");
     } else {
         $("#iconToggleTelemetry").removeClass("fa-eye-slash").addClass("fa-eye");
-        $("#textToggleTelemetry").text("Show Info");
         $("#btnToggleTelemetry")
             .removeClass("btn-outline-info")
             .addClass("btn-info")
-            .attr("title", "Click to unhide Info & Telemetry Panel");
+            .attr("title", "Show Info & Telemetry Panel");
     }
 }
 
@@ -1338,6 +1461,141 @@ window.applyPrinterStatusBadge = applyPrinterStatusBadge;
 window.updatePrinterStatus = updatePrinterStatus;
 window.reloadComPorts = reloadComPorts;
 
+// ==========================================
+// Attractive Inspection DataTables Integration
+// ==========================================
+
+function initInspectionDataTables() {
+    if (!$.fn.DataTable) return;
+
+    var dtOptions = {
+        paging: false,
+        searching: false,
+        info: false,
+        ordering: true,
+        order: [[0, 'asc']],
+        autoWidth: false,
+        responsive: false, // keep responsive false so table-layout fixed is respected without injecting scrollbars
+        destroy: true,
+        language: {
+            emptyTable: '<div class="py-3 text-muted text-center"><i class="fas fa-barcode mr-2"></i>Awaiting test trigger / barcode scan...</div>',
+            zeroRecords: '<div class="py-2 text-muted text-center">No parameters found</div>'
+        },
+        columnDefs: [
+            { targets: [0], className: 'col-sn', width: '38px', orderSequence: ['asc', 'desc'] },
+            { targets: [1], className: 'col-param', width: '38%', orderSequence: ['asc', 'desc'] },
+            { targets: [2], className: 'col-val', width: '14%', orderSequence: ['asc', 'desc'] },
+            { targets: [3], className: 'col-val', width: '14%', orderSequence: ['asc', 'desc'] },
+            { targets: [4], className: 'col-status', width: '34%', orderSequence: ['asc', 'desc'] }
+        ]
+    };
+
+    if ($('#export_table_0').length > 0) {
+        if ($.fn.DataTable.isDataTable('#export_table_0')) {
+            $('#export_table_0').DataTable().destroy();
+        }
+        $('#export_table_0').DataTable(dtOptions);
+    }
+
+    if ($('#export_table_1').length > 0) {
+        if ($.fn.DataTable.isDataTable('#export_table_1')) {
+            $('#export_table_1').DataTable().destroy();
+        }
+        $('#export_table_1').DataTable(dtOptions);
+    }
+}
+
+function clearInspectionDataTables() {
+    clearCelebrationFeedback();
+    if ($.fn.DataTable) {
+        if ($.fn.DataTable.isDataTable('#export_table_0')) {
+            $('#export_table_0').DataTable().clear().draw();
+        }
+        if ($.fn.DataTable.isDataTable('#export_table_1')) {
+            $('#export_table_1').DataTable().clear().draw();
+        }
+    }
+    $("#testResponse_0").empty();
+    $("#testResponse_1").empty();
+}
+
+function renderInspectionDataTables(resp) {
+    if (!resp || !resp.interType || !Array.isArray(resp.interType) || resp.interType.length === 0) {
+        clearInspectionDataTables();
+        return;
+    }
+
+    var rowsLeft = [];
+    var rowsRight = [];
+    var totalCount = resp.interType.length;
+    var mid = Math.ceil(totalCount / 2);
+
+    $.each(resp.interType, function (i, v) {
+        var sn = i + 1;
+        var st = (v.status || '').toString().trim();
+        var stUpper = st.toUpperCase();
+        var rowClass = 'row-status-default';
+        var badgeHtml = '';
+
+        if (stUpper === 'OK' || stUpper === 'PASS') {
+            rowClass = 'row-status-ok';
+            badgeHtml = '<span class="badge badge-status badge-status-ok"><i class="fas fa-check-circle mr-1"></i>' + (st || 'OK') + '</span>';
+        } else if (stUpper === 'FAIL' || stUpper === 'FAULT') {
+            rowClass = 'row-status-fail';
+            badgeHtml = '<span class="badge badge-status badge-status-fail"><i class="fas fa-times-circle mr-1"></i>' + (st || 'FAIL') + '</span>';
+        } else if (stUpper === 'ONGOING') {
+            rowClass = 'row-status-ongoing';
+            badgeHtml = '<span class="badge badge-status badge-status-ongoing"><i class="fas fa-spinner fa-spin mr-1"></i>ONGOING</span>';
+        } else if (stUpper === 'WAIT') {
+            rowClass = 'row-status-wait';
+            badgeHtml = '<span class="badge badge-status badge-status-wait"><i class="fas fa-clock mr-1"></i>WAIT</span>';
+        } else {
+            badgeHtml = '<span class="badge badge-status badge-status-info" title="' + st + '"><i class="fas fa-info-circle mr-1"></i>' + st + '</span>';
+        }
+
+        var isDisplayEmpty = (v.dispaly == null || v.dispaly === 'null' || v.dispaly === '');
+        var isActualEmpty = (v.actual == null || v.actual === 'null' || v.actual === '');
+
+        var displayVal = isDisplayEmpty ? '<span class="text-muted font-italic">&mdash;</span>' : v.dispaly;
+        var actualVal = isActualEmpty ? '<span class="text-muted font-italic">&mdash;</span>' : v.actual;
+
+        var trHtml = '<tr class="' + rowClass + '">' +
+            '<td class="col-sn" data-order="' + sn + '"><span class="badge-sn">' + sn + '</span></td>' +
+            '<td class="col-param" title="' + (v.parameter || '') + '">' + (v.parameter || '') + '</td>' +
+            '<td class="col-val">' + displayVal + '</td>' +
+            '<td class="col-val">' + actualVal + '</td>' +
+            '<td class="col-status" title="' + st + '">' + badgeHtml + '</td>' +
+            '</tr>';
+
+        // Split sequentially: 1..mid in Table 1 (Left), mid+1..end in Table 2 (Right)
+        if (i < mid) {
+            rowsLeft.push(trHtml);
+        } else {
+            rowsRight.push(trHtml);
+        }
+    });
+
+    // Destroy existing DataTables before injecting fresh DOM nodes
+    if ($.fn.DataTable) {
+        if ($.fn.DataTable.isDataTable('#export_table_0')) {
+            $('#export_table_0').DataTable().destroy();
+        }
+        if ($.fn.DataTable.isDataTable('#export_table_1')) {
+            $('#export_table_1').DataTable().destroy();
+        }
+    }
+
+    $("#testResponse_0").html(rowsLeft.join(''));
+    $("#testResponse_1").html(rowsRight.join(''));
+
+    // Re-initialize DataTables
+    initInspectionDataTables();
+}
+
+window.initInspectionDataTables = initInspectionDataTables;
+window.clearInspectionDataTables = clearInspectionDataTables;
+window.renderInspectionDataTables = renderInspectionDataTables;
+
 $(window).on("beforeunload", function () {
     if (window.currentTestAjaxRequest && typeof window.currentTestAjaxRequest.abort === 'function') {
         window.currentTestAjaxRequest.abort();
@@ -1345,6 +1603,7 @@ $(window).on("beforeunload", function () {
 });
 
 $(document).ready(function () {
+    initInspectionDataTables();
     initTelemetryToggle();
     if ($("#badgeCycleCount").length > 0) {
         initTelemetryPanel();
