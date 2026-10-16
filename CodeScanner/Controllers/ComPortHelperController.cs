@@ -57,11 +57,144 @@ namespace CodeScanner.Controllers
             return objENSetting;
         }
 
+        public static List<IntegerType> AlignParameters(enSetting setting, string[] response)
+        {
+            var list = new List<IntegerType>();
+            if (response == null || response.Length < 5) return list;
+
+            var settingInfos = setting?.SettingInfo ?? new List<enSettingInfo>();
+
+            // Extract telemetry parameter tokens between headers (first 4 items: @, display, control, sysRating) and footer (^)
+            int telemetryCount = response.Length - 5;
+            var telemetryTokens = new List<string>(telemetryCount);
+            for (int i = 4; i < response.Length - 1; i++)
+            {
+                telemetryTokens.Add(response[i]);
+            }
+
+            // Case 1: Exact count match (standard fast path)
+            if (telemetryTokens.Count == settingInfos.Count)
+            {
+                for (int i = 0; i < telemetryTokens.Count; i++)
+                {
+                    list.Add(ParseTelemetryItem(telemetryTokens[i], settingInfos[i].Parameters));
+                }
+                return list;
+            }
+
+            // Case 2: Heuristic alignment for FAN (Card section vs Assembly line)
+            // Some inverter models in DB have 22 parameters (omitting FAN), while jig firmware sends 23 (with FAN).
+            // Conversely, some DB settings define 23 parameters while jig firmware omits FAN.
+            int telFanIdx = telemetryTokens.FindIndex(t => !string.IsNullOrEmpty(t) && t.IndexOf("FAN", StringComparison.OrdinalIgnoreCase) >= 0);
+            int setFanIdx = settingInfos.FindIndex(s => !string.IsNullOrEmpty(s.Parameters) && s.Parameters.IndexOf("FAN", StringComparison.OrdinalIgnoreCase) >= 0);
+
+            if (telFanIdx >= 0 && setFanIdx < 0 && telemetryTokens.Count == settingInfos.Count + 1)
+            {
+                // Telemetry has FAN, but DB setting does not (e.g. 23 vs 22)
+                int setIdx = 0;
+                for (int telIdx = 0; telIdx < telemetryTokens.Count; telIdx++)
+                {
+                    if (telIdx == telFanIdx)
+                    {
+                        list.Add(ParseTelemetryItem(telemetryTokens[telIdx], "FAN (CARD SECTION)"));
+                    }
+                    else
+                    {
+                        string paramName = setIdx < settingInfos.Count ? settingInfos[setIdx].Parameters : $"PARAM {telIdx + 1}";
+                        list.Add(ParseTelemetryItem(telemetryTokens[telIdx], paramName));
+                        setIdx++;
+                    }
+                }
+                Log.Info($"[AlignParameters] Aligned telemetry (23 items) with setting '{setting?.FileId}' (22 items) by matching FAN parameter.");
+                return list;
+            }
+            else if (telFanIdx < 0 && setFanIdx >= 0 && telemetryTokens.Count + 1 == settingInfos.Count)
+            {
+                // DB setting has FAN, but telemetry omitted it (e.g. 22 vs 23)
+                int telIdx = 0;
+                for (int setIdx = 0; setIdx < settingInfos.Count; setIdx++)
+                {
+                    if (setIdx == setFanIdx)
+                    {
+                        list.Add(new IntegerType
+                        {
+                            parameter = settingInfos[setIdx].Parameters,
+                            dispaly = "--",
+                            actual = "--",
+                            status = "N/A"
+                        });
+                    }
+                    else
+                    {
+                        if (telIdx < telemetryTokens.Count)
+                        {
+                            list.Add(ParseTelemetryItem(telemetryTokens[telIdx], settingInfos[setIdx].Parameters));
+                            telIdx++;
+                        }
+                    }
+                }
+                Log.Info($"[AlignParameters] Aligned telemetry (22 items) with setting '{setting?.FileId}' (23 items) by marking FAN as N/A.");
+                return list;
+            }
+
+            // Case 3: General tolerance alignment (mapping available telemetry to available settings)
+            int minCount = Math.Min(telemetryTokens.Count, settingInfos.Count);
+            for (int i = 0; i < minCount; i++)
+            {
+                list.Add(ParseTelemetryItem(telemetryTokens[i], settingInfos[i].Parameters));
+            }
+
+            // If telemetry has extra items beyond setting definitions, preserve them
+            for (int i = minCount; i < telemetryTokens.Count; i++)
+            {
+                list.Add(ParseTelemetryItem(telemetryTokens[i], $"PARAM {i + 1}"));
+            }
+
+            // If setting definitions expect more parameters than received, mark missing ones as pending
+            for (int i = minCount; i < settingInfos.Count; i++)
+            {
+                list.Add(new IntegerType
+                {
+                    parameter = settingInfos[i].Parameters,
+                    dispaly = "--",
+                    actual = "--",
+                    status = "N/A"
+                });
+            }
+
+            Log.Warn($"[AlignParameters] Telemetry count ({telemetryTokens.Count}) differed from setting count ({settingInfos.Count}) for '{setting?.FileId}'. Aligned {list.Count} parameters gracefully.");
+            return list;
+        }
+
+        private static IntegerType ParseTelemetryItem(string item, string parameterName)
+        {
+            var inter = new IntegerType { parameter = parameterName ?? string.Empty };
+            if (string.IsNullOrEmpty(item))
+            {
+                inter.status = "N/A";
+                return inter;
+            }
+
+            int colonIdx = item.IndexOf(':');
+            if (colonIdx >= 0)
+            {
+                string[] parts = item.Split(':');
+                inter.dispaly = parts.Length > 0 ? parts[0] : string.Empty;
+                inter.actual = parts.Length > 1 ? parts[1] : string.Empty;
+                inter.status = parts.Length > 2 ? parts[2] : (parts.Length > 1 ? parts[1] : string.Empty);
+            }
+            else
+            {
+                inter.status = item;
+            }
+            return inter;
+        }
+
         public enSettingResponse CompairFile(enSetting setting, string[] response)
         {
             var SettingResp = new enSettingResponse();
             SettingResp.interType = new List<IntegerType>();
-            if (response.Length < 5)
+            if (response == null || response.Length < 5)
             {
                 SettingResp.status = (int)ResponseStatus.Fail;
                 SettingResp.message = "Response Parameter is missing";
@@ -76,58 +209,26 @@ namespace CodeScanner.Controllers
             }
             catch (Exception ex)
             {
-                throw;
+                Log.Error("ComPortHelper.CompairFile. Error while Read() Model. \n Exception : " + ex.ToString());
             }
 
-            SettingResp.model = objENModel.Name;
+            SettingResp.model = !string.IsNullOrEmpty(objENModel.Name) ? objENModel.Name : (setting.Model != null ? setting.Model.Name : string.Empty);
             SettingResp.header = response.First();
             SettingResp.footer = response.Last();
             SettingResp.displayPv = response[1];
             SettingResp.controlPv = response[2];
             SettingResp.sysRating = response[3];
 
-            var indx = 0;
-            var settingIndx = 0;
-            var respLenght = response.Length;
+            // Robust parameter alignment (tolerant of 22 vs 23 FAN count discrepancies)
+            SettingResp.interType = AlignParameters(setting, response);
 
-            if ((respLenght - 5) == setting.SettingInfo.Count)
-            {
-                foreach (var item in response)
-                {
-                    if (indx > 3 && indx != (respLenght - 1))
-                    {
-                        var objSetting = setting.SettingInfo[settingIndx];
-                        var integerVal = item.IndexOf(':');
-                        if (integerVal >= 0)
-                        {
-                            string[] integerArray = item.Split(':');
-                            SettingResp.interType.Add(new IntegerType
-                            {
-                                dispaly = integerArray[0],
-                                actual = integerArray[1],
-                                status = integerArray[2],
-                                parameter = objSetting.Parameters
-                            });
-                        }
-                        else
-                        {
-                            SettingResp.interType.Add(new IntegerType
-                            {
-                                status = item,
-                                parameter = objSetting.Parameters
-                            });
-                        }
-                        settingIndx++;
-                    }
-                    indx++;
-                }
-            }
-            else
+            if (SettingResp.interType.Count == 0 && (setting.SettingInfo != null && setting.SettingInfo.Count > 0))
             {
                 SettingResp.status = (int)ResponseStatus.Fail;
-                SettingResp.message = "Response length mismatch";
+                SettingResp.message = "Response Parameter is missing";
                 return SettingResp;
             }
+
             return SettingResp;
         }
 
@@ -239,7 +340,7 @@ namespace CodeScanner.Controllers
                 objENResponse.CurrentDate = currentDate;
                 objENResponse.CurrentTime = Time;
                 objENResponse.ResponseTime = DateTime.Now;
-                objENResponse.Model = setting.Model.Name;
+                objENResponse.Model = setting.Model != null ? setting.Model.Name : string.Empty;
 
                 Log.Info(" Model-TestingJig : " + testingJig);
                 try
@@ -253,47 +354,30 @@ namespace CodeScanner.Controllers
                 objENResponse.Id = respId;
             }
 
-            var indx = 0;
-            var j = 0;
             List<enResponseSummary> listOfResponseSummary = new List<enResponseSummary>();
+            var alignedItems = AlignParameters(setting, response);
 
-            foreach (var item in response)
+            foreach (var item in alignedItems)
             {
-                Log.Trace("Response Count " + j + "  :" + item);
-                var IntergerTypeObject = new IntegerType();
-                if (indx > 3 && indx != (response.Length - 1))
+                var objENResponseSummary = new enResponseSummary()
                 {
-                    Log.Trace("success Response Count " + j + "  :" + item);
-
-                    var integerVal = item.IndexOf(':');
-                    if (integerVal >= 0)
-                    {
-                        string[] integerArray = item.Split(':');
-                        IntergerTypeObject.dispaly = integerArray[0];
-                        IntergerTypeObject.actual = integerArray[1];
-                        IntergerTypeObject.status = integerArray[2];
-                        IntergerTypeObject.parameter = setting.SettingInfo[j].Parameters;
-                    }
-                    else
-                    {
-                        IntergerTypeObject.status = item;
-                        IntergerTypeObject.parameter = setting.SettingInfo[j].Parameters;
-                    }
-
-                    var objENResponseSummary = new enResponseSummary() { ResponseId = objENResponse.Id, Parameters = IntergerTypeObject.parameter, Dispaly = IntergerTypeObject.dispaly, Actual = IntergerTypeObject.actual, Status = IntergerTypeObject.status, IsFinal = isOk };
-                    var objBLResponseSummary = new blResponseSummary(objENResponseSummary);
-                    try
-                    {
-                        objBLResponseSummary.Create();
-                        listOfResponseSummary.Add(objENResponseSummary);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex.ToString());
-                    }
-                    j++;
+                    ResponseId = objENResponse.Id,
+                    Parameters = item.parameter,
+                    Dispaly = item.dispaly,
+                    Actual = item.actual,
+                    Status = item.status,
+                    IsFinal = isOk
+                };
+                var objBLResponseSummary = new blResponseSummary(objENResponseSummary);
+                try
+                {
+                    objBLResponseSummary.Create();
+                    listOfResponseSummary.Add(objENResponseSummary);
                 }
-                indx++;
+                catch (Exception ex)
+                {
+                    Log.Error(ex.ToString());
+                }
             }
 
             return listOfResponseSummary;

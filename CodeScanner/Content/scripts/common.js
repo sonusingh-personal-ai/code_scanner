@@ -322,10 +322,11 @@ function insertIntoDatabase(barcode, port, baudRate, isRepeat, visualby, testedB
                 tbl = '<tr class="cell-' + (indx + 1) + '" data-toggle="collapse" data-target="#demo-' + (indx + 1) + '"><td style="font-weight:bold" colspan="2">' + (indx + 1) + '.</td><td style="font-weight:bold" colspan="3">Param</td><td style="font-weight:bold" colspan="2">Display</td><td style="font-weight:bold" colspan="2">Actual</td><td style="font-weight:bold" colspan="2">Status</td></tr>'
                 $.each(val, function (respIndx, result) {
                     if (respIndx > 4 && respIndx != (val.length - 1)) {
+                        var paramName = (resp.SettingInfoList && resp.SettingInfoList[sn - 1]) ? resp.SettingInfoList[sn - 1].Parameters : (resp.SettingInfoList && resp.SettingInfoList[sn] ? resp.SettingInfoList[sn].Parameters : "Param #" + sn);
                         if (result.indexOf(":") != -1) {
-                            tr += '<tr id="demo-' + (indx + 1) + '" class ="collapse cell-' + (indx + 1) + ' row-child"><td colspan="2">#' + sn + '</td><td colspan="3">' + resp.SettingInfoList[sn].Parameters + '</td><td colspan="2">' + result.split(":")[0] + '</td><td colspan="2">' + result.split(":")[1] + '</td><td colspan="2">' + result.split(":")[2] + '</td></tr>'
+                            tr += '<tr id="demo-' + (indx + 1) + '" class ="collapse cell-' + (indx + 1) + ' row-child"><td colspan="2">#' + sn + '</td><td colspan="3">' + paramName + '</td><td colspan="2">' + result.split(":")[0] + '</td><td colspan="2">' + result.split(":")[1] + '</td><td colspan="2">' + result.split(":")[2] + '</td></tr>';
                         } else {
-                            tr += '<tr id="demo-' + (indx + 1) + '" class ="collapse cell-' + (indx + 1) + ' row-child"><td colspan="2">#' + sn + '</td><td colspan="3">' + resp.SettingInfoList[sn].Parameters + '</td><td colspan="2">--</td><td colspan="2">--</td><td colspan="2">' + result + '</td></tr>'
+                            tr += '<tr id="demo-' + (indx + 1) + '" class ="collapse cell-' + (indx + 1) + ' row-child"><td colspan="2">#' + sn + '</td><td colspan="3">' + paramName + '</td><td colspan="2">--</td><td colspan="2">--</td><td colspan="2">' + result + '</td></tr>';
                         }
                         sn++;
                     }
@@ -434,8 +435,20 @@ function getValueFromLocalStorage() {
     $("#testedBy").val(localStorage.getItem("testedBy"));
     $("#productionLine").val(localStorage.getItem("productionLine"));
     $("#procEngg").val(localStorage.getItem("lineInCharge"));
-    $("#baudRate").val(localStorage.getItem("baudRate"));
-    $("#com_port").val(localStorage.getItem("port"));
+    $("#baudRate").val(localStorage.getItem("baudRate") || "9600");
+    var savedPort = localStorage.getItem("port");
+    if (savedPort && $("#com_port option[value='" + savedPort + "']").length > 0) {
+        $("#com_port").val(savedPort);
+    } else {
+        var $realPorts = $("#com_port option").filter(function () {
+            var v = $(this).val();
+            return v && v !== "" && v !== "SIMULATOR";
+        });
+        if ($realPorts.length === 1) {
+            $("#com_port").val($realPorts.val());
+            localStorage.setItem("port", $realPorts.val());
+        }
+    }
     $("#serialCardNo").val(localStorage.getItem("serialCardNo"));
     $("#QcStatus").val(localStorage.getItem("qcStatus"));
     $("#processEngg").val(localStorage.getItem("processEngg"));
@@ -1307,6 +1320,7 @@ function reloadComPorts(callback) {
                 if (!foundPrev && resp.ports.length === 1 && resp.ports[0].Key !== "SIMULATOR") {
                     $select.val(resp.ports[0].Key);
                 }
+                $select.trigger("change");
                 if (typeof toastersetting === 'function') {
                     toastersetting("COM ports refreshed (" + resp.ports.length + " found)", "Ports Updated", "success", "#28a745");
                 }
