@@ -8,6 +8,7 @@ using System.Linq;
 using System.Drawing.Printing;
 using System.Globalization;
 using System.Web.SessionState;
+using CodeScanner.Infrastructure;
 
 namespace CodeScanner.Controllers
 {
@@ -19,13 +20,11 @@ namespace CodeScanner.Controllers
         {
             var genericDropdwon = new List<enGenericDropdown>();
             var supportedLanguagesList = new List<SelectListItem>();
-            var listOfPorst = SerialPort.GetPortNames();
-            var DistinctPorst = listOfPorst.Distinct().ToList();
-            foreach (var item in DistinctPorst)
+            var listOfPorts = SerialPortManager.GetAvailablePorts();
+            foreach (var item in listOfPorts)
             {
-                SelectListItem port = new SelectListItem { Value = item, Text = item, Selected = true };
+                SelectListItem port = new SelectListItem { Value = item, Text = item };
                 genericDropdwon.Add(new enGenericDropdown() { Key = item, Value = item });
-
                 supportedLanguagesList.Add(port);
             }
 
@@ -504,7 +503,7 @@ namespace CodeScanner.Controllers
             try
             {
                 var ports = new List<enGenericDropdown>();
-                var listOfPorts = SerialPort.GetPortNames().Distinct().OrderBy(p => p).ToList();
+                var listOfPorts = SerialPortManager.GetAvailablePorts();
                 foreach (var item in listOfPorts)
                 {
                     ports.Add(new enGenericDropdown { Key = item, Value = item });

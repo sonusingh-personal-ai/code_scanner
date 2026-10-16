@@ -7,14 +7,12 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
-using System.Collections.Concurrent;
-using System.IO.Ports;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Web.Mvc;
 using System.Web.SessionState;
 using Utility;
+using CodeScanner.Infrastructure;
 #if DEBUG
 using CodeScanner.Simulation;
 #endif
@@ -24,53 +22,33 @@ namespace CodeScanner.Controllers
     [SessionState(SessionStateBehavior.Disabled)]
     public class ComPortController : ComPortHelperController
     {
-        static SerialPort _serialPort;
+        // Each blocking ReadLine() waits at most this long. Kept short so the loop can
+        // notice pre-emption by a newer scan / a USB detach quickly; the overall budget
+        // for a frame is still governed by OverallWatchdogSeconds.
+        const int ReadSliceTimeoutMs = 1000;
 
-        // How long to wait for a single line from the device before treating that
-        // particular read as "missed".
-        const int ReadPerLineTimeoutMs = 5000;
+        // Log a "still waiting" line at most this often (avoids 1 log/second spam).
+        const int TimeoutLogIntervalSeconds = 5;
 
         // Total time (seconds) to keep waiting/retrying reads for a PASS/FAIL before
         // giving up on this scan entirely and returning a clear timeout result.
         const double OverallWatchdogSeconds = 15;
-        // _serialPort is shared (static) across every request, and by design stays open
-        // across separate HTTP requests while a scan's parameters stream in (see
-        // IsRecurrence below). Without serializing access, two overlapping requests -
-        // e.g. a rapid double-scan - can race: one closes/reopens the port while the
-        // other is still mid-ReadLine() on it, producing "The port is closed".
-        static readonly object _portLock = new object();
 
-        private static void CloseSerialPort()
+        // The physical port is shared across requests and, by design, stays open across
+        // separate HTTP requests while a scan's parameters stream in (see IsRecurrence).
+        // All lifecycle (open/close/retry/idle-release) and the cross-request lock now live
+        // in SerialPortManager so close-then-reopen is deterministic.
+        private static void CloseSerialPort(string reason = "scan finished")
         {
-            var portToClose = _serialPort;
-            _serialPort = null;
-            if (portToClose != null)
-            {
-                // Disconnect asynchronously in background to avoid blocking ASP.NET request threads
-                // when unmanaged serial driver is stalled from a physical USB disconnect
-                ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    try
-                    {
-                        if (portToClose.IsOpen)
-                        {
-                            portToClose.Close();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error("Error closing serial port: " + ex.Message);
-                    }
-                    try
-                    {
-                        portToClose.Dispose();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error("Error disposing serial port: " + ex.Message);
-                    }
-                });
-            }
+            SerialPortManager.Close(reason);
+        }
+
+        private JsonResult SupersededResult(enSettingResponse matchString)
+        {
+            matchString.status = (int)ResponseStatus.Fail;
+            matchString.message = "Scan was superseded by a newer scan.";
+            matchString.isOk = true;
+            return Json(matchString, JsonRequestBehavior.AllowGet);
         }
 
         [HttpPost]
@@ -170,12 +148,20 @@ namespace CodeScanner.Controllers
             string[] response = new string[] { };
             try
             {
-                // Serializes all serial-port access across requests - see _portLock above.
-                // If a second scan/recurrence call arrives while this one is still mid-read,
-                // it now queues here instead of racing to close/reopen the same port.
-                lock (_portLock)
+                // A brand-new scan bumps the generation BEFORE waiting on the lock, so any
+                // in-flight read from the previous scan notices within ~1s and bails out
+                // instead of making this scan queue for the full watchdog period.
+                long scanGeneration = objResponse.IsRecurrence
+                    ? SerialPortManager.CurrentGeneration
+                    : SerialPortManager.BeginNewScan();
+
+                string portName = SerialPortManager.NormalizePortName(objResponse.Port);
+                int baudRate = objResponse.BaudRate > 0 ? objResponse.BaudRate : 9600;
+
+                // Serializes all serial-port access across requests (open/write/read/close).
+                lock (SerialPortManager.PortLock)
                 {
-                    Log.Info("@#Recurrence  : " + objResponse.IsRecurrence);
+                    Log.Info("@#Recurrence  : " + objResponse.IsRecurrence + " | Port: " + portName + " | Gen: " + scanGeneration);
 #if DEBUG
                     bool isSim = string.Equals(objResponse.Port, "SIMULATOR", StringComparison.OrdinalIgnoreCase);
 #else
@@ -183,40 +169,34 @@ namespace CodeScanner.Controllers
 #endif
                     if (!isSim)
                     {
+                        if (scanGeneration != SerialPortManager.CurrentGeneration)
+                        {
+                            return SupersededResult(matchString);
+                        }
+
                         if (!objResponse.IsRecurrence)
                         {
-                            CloseSerialPort();
-
-                            _serialPort = new SerialPort
-                            {
-                                PortName = objResponse.Port,
-                                BaudRate = objResponse.BaudRate > 0 ? objResponse.BaudRate : 9600,
-                                Parity = SetPortParity(Parity.None),
-                                DataBits = SetPortDataBits(8),
-                                StopBits = SetPortStopBits(StopBits.One),
-                                Handshake = SetPortHandshake(Handshake.None),
-                                ReadTimeout = ReadPerLineTimeoutMs
-                            };
-                            _serialPort.Open();
-                            _serialPort.WriteLine("#" + objResponse.Barcode + "@");
+                            // Deterministic close -> (retrying) open -> purge stale bytes -> send.
+                            SerialPortManager.Open(portName, baudRate, ReadSliceTimeoutMs);
+                            SerialPortManager.WriteLine("#" + objResponse.Barcode + "@");
                         }
-                        else
+                        else if (!SerialPortManager.IsOpen)
                         {
-                            if (_serialPort == null || !_serialPort.IsOpen)
-                            {
-                                CloseSerialPort();
-                                matchString.status = (int)ResponseStatus.Fail;
-                                matchString.message = "Serial port " + objResponse.Port + " is closed or disconnected. Please scan again.";
-                                matchString.isOk = true;
-                                return Json(matchString, JsonRequestBehavior.AllowGet);
-                            }
+                            CloseSerialPort("recurrence found port closed");
+                            matchString.status = (int)ResponseStatus.Fail;
+                            matchString.message = "Serial port " + portName + " is closed or disconnected. Please scan again.";
+                            matchString.isOk = true;
+                            return Json(matchString, JsonRequestBehavior.AllowGet);
                         }
                     }
 
                     List<List<string>> stringObject = new List<List<string>>();
                     DateTime now = DateTime.Now;
+                    DateTime lastTimeoutLog = DateTime.MinValue;
                     var t = 0d;
                     var count = 1;
+                    var reconnectsUsed = 0;
+                    const int MaxReconnectsPerRequest = 2;
                     #region while loop
 
                     while (t < OverallWatchdogSeconds)
@@ -225,22 +205,25 @@ namespace CodeScanner.Controllers
 
                         if (!isSim)
                         {
-                            // Instant detection: if Windows device manager no longer lists the port, USB was detached!
-                            if (!SerialPort.GetPortNames().Contains(objResponse.Port))
+                            // A newer scan has taken over the port - stop without touching it.
+                            if (scanGeneration != SerialPortManager.CurrentGeneration)
                             {
-                                CloseSerialPort();
-                                matchString.status = (int)ResponseStatus.Fail;
-                                matchString.message = $"COM Port '{objResponse.Port}' was disconnected from the system.";
-                                matchString.isOk = true;
-                                Log.Warn($"[SendParameter] Port '{objResponse.Port}' disconnected during loop.");
-                                return Json(matchString, JsonRequestBehavior.AllowGet);
+                                return SupersededResult(matchString);
                             }
 
-                            if (_serialPort == null || !_serialPort.IsOpen)
+                            if (!SerialPortManager.IsOpen)
                             {
-                                CloseSerialPort();
+                                if (SerialPortManager.IsPortPresent(portName) && reconnectsUsed < MaxReconnectsPerRequest)
+                                {
+                                    reconnectsUsed++;
+                                    Log.Warn("[SendParameter] Port " + portName + " closed unexpectedly but device is still attached. Reconnecting (" + reconnectsUsed + "/" + MaxReconnectsPerRequest + ").");
+                                    SerialPortManager.Open(portName, baudRate, ReadSliceTimeoutMs);
+                                    continue;
+                                }
+
+                                CloseSerialPort("closed during read");
                                 matchString.status = (int)ResponseStatus.Fail;
-                                matchString.message = "Serial port " + objResponse.Port + " was closed during read.";
+                                matchString.message = "Serial port " + portName + " was closed during read.";
                                 matchString.isOk = true;
                                 return Json(matchString, JsonRequestBehavior.AllowGet);
                             }
@@ -258,53 +241,80 @@ namespace CodeScanner.Controllers
                         {
                             try
                             {
-                                rec = _serialPort.ReadLine();
+                                rec = SerialPortManager.Port.ReadLine();
+                                SerialPortManager.Touch();
                             }
                             catch (TimeoutException)
                             {
-                                if (!SerialPort.GetPortNames().Contains(objResponse.Port))
+                                // Only now (no data for a slice) do we pay for a device-presence check.
+                                if (!SerialPortManager.IsPortPresent(portName))
                                 {
-                                    CloseSerialPort();
+                                    CloseSerialPort("device detached");
                                     matchString.status = (int)ResponseStatus.Fail;
-                                    matchString.message = $"COM Port '{objResponse.Port}' was disconnected. Please check the cable.";
+                                    matchString.message = $"COM Port '{portName}' was disconnected. Please check the cable.";
                                     matchString.isOk = true;
+                                    Log.Warn($"[SendParameter] Port '{portName}' disconnected during read.");
                                     return Json(matchString, JsonRequestBehavior.AllowGet);
                                 }
-                                Log.Error("ComPortController.SendParameter - Read timeout waiting for device response (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
+
+                                if ((DateTime.Now - lastTimeoutLog).TotalSeconds >= TimeoutLogIntervalSeconds)
+                                {
+                                    lastTimeoutLog = DateTime.Now;
+                                    Log.Warn("ComPortController.SendParameter - Waiting for device response on " + portName + " (elapsed " + t.ToString("F0") + "s / " + OverallWatchdogSeconds.ToString("F0") + "s).");
+                                }
                                 continue;
                             }
-                            catch (IOException ioEx)
+                            catch (Exception readEx) when (readEx is IOException || readEx is UnauthorizedAccessException || readEx is InvalidOperationException || readEx is ObjectDisposedException)
                             {
-                                CloseSerialPort();
+                                // Transient driver hiccup while the cable is still attached: reconnect in place
+                                // and keep listening (the jig is already running the test - do NOT resend).
+                                if (SerialPortManager.IsPortPresent(portName) && reconnectsUsed < MaxReconnectsPerRequest)
+                                {
+                                    reconnectsUsed++;
+                                    Log.Warn("[SendParameter] Read error on " + portName + " while device still attached (" + readEx.GetType().Name + ": " + readEx.Message + "). Reconnecting (" + reconnectsUsed + "/" + MaxReconnectsPerRequest + ").");
+                                    try
+                                    {
+                                        SerialPortManager.Open(portName, baudRate, ReadSliceTimeoutMs);
+                                        continue;
+                                    }
+                                    catch (Exception reopenEx)
+                                    {
+                                        Log.Error("[SendParameter] Reconnect to " + portName + " failed: " + reopenEx.Message);
+                                    }
+                                }
+
+                                CloseSerialPort("read error");
                                 matchString.status = (int)ResponseStatus.Fail;
-                                matchString.message = $"COM Port '{objResponse.Port}' disconnected / error: {ioEx.Message}";
+                                matchString.message = SerialPortManager.IsPortPresent(portName)
+                                    ? $"COM Port '{portName}' communication error: {readEx.Message}. Please scan again."
+                                    : $"COM Port '{portName}' was disconnected. Please check the cable.";
                                 matchString.isOk = true;
-                                Log.Error("ComPortController.SendParameter IOException: " + ioEx);
-                                return Json(matchString, JsonRequestBehavior.AllowGet);
-                            }
-                            catch (UnauthorizedAccessException uaEx)
-                            {
-                                CloseSerialPort();
-                                matchString.status = (int)ResponseStatus.Fail;
-                                matchString.message = $"COM Port '{objResponse.Port}' access lost / disconnected.";
-                                matchString.isOk = true;
-                                Log.Error("ComPortController.SendParameter UnauthorizedAccessException: " + uaEx);
+                                Log.Error("ComPortController.SendParameter read failure: " + readEx);
                                 return Json(matchString, JsonRequestBehavior.AllowGet);
                             }
                         }
 
                         Log.Info("Receving string :- " + rec);
 
-                        if (rec.Length != 4)
+                        if (!string.IsNullOrWhiteSpace(rec))
                         {
-                            var isExist = rec.LastIndexOf("@");
-                            var CarretIndx = rec.LastIndexOf("^");
+                            // Robust frame locator: locate the latest complete @...^ frame in the buffer
+                            int end = rec.LastIndexOf('^');
+                            int start = (end > 0) ? rec.LastIndexOf('@', end) : -1;
 
-                            if (isExist > -1 && CarretIndx > -1)
+                            if (start >= 0 && end > start)
                             {
-                                var nrec = rec.Substring(isExist, (CarretIndx + 1) - isExist);
+                                var nrec = rec.Substring(start, (end + 1) - start);
                                 Log.Info(nrec);
-                                response = nrec.Split(',');
+                                response = nrec.Split(',').Select(tok => tok.Trim()).ToArray();
+
+                                // A partial/noisy line (e.g. port opened mid-transmission, line glitch)
+                                // must not abort the scan with IndexOutOfRange - skip it and keep listening.
+                                if (response.Length < 5)
+                                {
+                                    Log.Warn("[SendParameter] Ignoring malformed frame (" + response.Length + " fields): " + nrec);
+                                    continue;
+                                }
 
                                 Log.Info("response 1 : " + response[1]);
                                 Log.Info("dpn : " + objResponse.DisProgNo);
@@ -330,8 +340,11 @@ namespace CodeScanner.Controllers
 
                                     if (unResponsive == "SCAN CODE")
                                     {
-                                        CloseSerialPort();
-                                        return Json(unResponsive, JsonRequestBehavior.AllowGet);
+                                        CloseSerialPort("device requested re-scan");
+                                        matchString.status = (int)ResponseStatus.Fail;
+                                        matchString.message = "Device requested a re-scan (SCAN CODE). Please scan the barcode again.";
+                                        matchString.isOk = true;
+                                        return Json(matchString, JsonRequestBehavior.AllowGet);
                                     }
 
                                     Log.Info(matchStr);
@@ -427,8 +440,17 @@ namespace CodeScanner.Controllers
                                         matchString = CompairFile(setting, response);
                                         matchString.totalString = stringObject;
                                         matchString.SettingInfoList = setting.SettingInfo;
-                                        matchString.model = setting.Model.Name;
+                                        matchString.model = setting.Model != null ? setting.Model.Name : string.Empty;
                                         matchString.rawData = nrec;
+
+                                        // If an intermediate frame failed parameter mapping (e.g. transient line glitch),
+                                        // do NOT abort the scan or show an error alert to the operator. Keep listening for the next complete frame!
+                                        if (!string.IsNullOrEmpty(matchString.message))
+                                        {
+                                            Log.Warn("[SendParameter] Intermediate frame skipped (" + matchString.message + "). Waiting for next complete frame.");
+                                            continue;
+                                        }
+
                                         return Json(matchString, JsonRequestBehavior.AllowGet);
                                     }
                                 }
@@ -616,7 +638,7 @@ namespace CodeScanner.Controllers
             var matchString = CompairFile(setting, response);
             matchString.totalString = stringObject;
             matchString.SettingInfoList = setting.SettingInfo;
-            matchString.model = setting.Model.Name;
+            matchString.model = setting.Model != null ? setting.Model.Name : (setting.FileId ?? string.Empty);
             matchString.isOk = isOk;
             matchString.rawData = rawData;
             return matchString;

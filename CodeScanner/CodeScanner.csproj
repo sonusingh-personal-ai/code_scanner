@@ -326,6 +326,7 @@
     <Compile Include="Controllers\SettingController.cs" />
     <Compile Include="Controllers\SimulatorController.cs" />
     <Compile Include="Simulation\JigSimulationEngine.cs" />
+    <Compile Include="Infrastructure\SerialPortManager.cs" />
     <Compile Include="ExportService.cs" />
     <Compile Include="LineConfigHelper.cs" />
     <Compile Include="Global.asax.cs">

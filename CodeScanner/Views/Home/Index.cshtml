@@ -158,8 +158,29 @@
 
         // Populate dropdowns
         $("#com_port").empty();
+        $("#com_port").append("<option value=''>Select</option>");
         $.each(port, function(indx, val){
             $("#com_port").append("<option value='"+val.Key +"'>"+val.Value+"</option>");
+        });
+
+        $("#com_port").on("change", function () {
+            var val = $(this).val();
+            if (val && val !== "") {
+                localStorage.setItem("port", val);
+                $(this).removeClass("isValidate").addClass("validate");
+                $("#info_status").val("Enable").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
+            } else {
+                localStorage.removeItem("port");
+                $("#info_status").val("Disable").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
+            }
+        });
+
+        $("#baudRate").on("change", function () {
+            var val = $(this).val();
+            if (val && val !== "") {
+                localStorage.setItem("baudRate", val);
+                $(this).removeClass("isValidate").addClass("validate");
+            }
         });
 
         $("#prnter").empty();
@@ -238,12 +259,6 @@
             }
         });
 
-        if (port.length > 0) {
-            $("#info_status").val("Enable").css({ "background-color": "#81c57b", "color": "#000", "font-weight": "bold" });
-        } else {
-            $("#info_status").val("Disable").css({ "background-color": "#F72F35", "color": "#fff", "font-weight": "bold" });
-        }
-
         setInfo();
         validateFileds();
 
@@ -293,6 +308,7 @@
         });
 
         getValueFromLocalStorage();
+        $("#com_port").trigger("change");
 
         $("#productionLine").on("change", function(i, e){
             checkProductionLine();
