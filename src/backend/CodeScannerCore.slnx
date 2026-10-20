@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="CodeScanner.API/CodeScanner.API.csproj" />
+  <Project Path="CodeScanner.Application/CodeScanner.Application.csproj" />
+  <Project Path="CodeScanner.Domain/CodeScanner.Domain.csproj" />
+  <Project Path="CodeScanner.Infrastructure/CodeScanner.Infrastructure.csproj" />
+</Solution>

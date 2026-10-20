@@ -1,0 +1,19 @@
+# Build outputs
+**/bin/
+**/obj/
+**/dist/
+
+# Dependencies
+**/node_modules/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+
+# Logs
+*.log
